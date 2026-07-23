@@ -1,0 +1,181 @@
+/* Aria — Apple Music / Cider inspired theme.
+   Artwork-forward, frosted surfaces, red-pink accent. Follows system light/dark. */
+
+:root {
+  --font:
+    "SF Pro Display", "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+
+  /* Light */
+  --bg: #ffffff;
+  --bg-deep: #f5f5f7;
+  --sidebar: rgba(245, 245, 247, 0.64);
+  --surface: rgba(0, 0, 0, 0.03);
+  --hover: rgba(0, 0, 0, 0.05);
+  --active: rgba(0, 0, 0, 0.08);
+  --text: #1d1d1f;
+  --text-dim: #6e6e73;
+  --text-faint: #a1a1a6;
+  --border: rgba(0, 0, 0, 0.08);
+  --accent: rgb(182, 141, 93);
+  --accent-2: rgb(216, 177, 128);
+  --accent-text: #ffffff;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --art-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+  --art-primary: rgb(182, 141, 93);
+  --art-secondary: rgb(122, 75, 100);
+  --art-tertiary: rgb(71, 62, 113);
+  --art-deep: rgb(24, 18, 24);
+  --dynamic-bg-blur: 7px;
+  --dynamic-bg-brightness: 45%;
+  --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-spring-strong: cubic-bezier(0.34, 1.7, 0.64, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101012;
+    --bg-deep: #0a0a0c;
+    --sidebar: rgba(24, 24, 27, 0.5);
+    --surface: rgba(255, 255, 255, 0.04);
+    --hover: rgba(255, 255, 255, 0.07);
+    --active: rgba(255, 255, 255, 0.12);
+    --text: #f5f5f7;
+    --text-dim: #a1a1a6;
+    --text-faint: #6e6e73;
+    --border: rgba(255, 255, 255, 0.09);
+    --accent: rgb(182, 141, 93);
+    --accent-2: rgb(216, 177, 128);
+    --accent-text: #ffffff;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    --art-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-faint);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Shared building blocks -------------------------------------------------- */
+
+.view {
+  padding: 28px 32px 40px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.view-title {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 22px;
+}
+
+.pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border-radius: 980px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  transition:
+    background 0.15s,
+    transform 240ms var(--motion-spring);
+}
+.pill-btn:hover {
+  background: var(--hover);
+  transform: translateY(-1px) scale(1.025);
+}
+.pill-btn:active {
+  transform: scale(0.95);
+}
+.pill-btn.filled {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.pill-btn.filled:hover {
+  background: var(--accent-2);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 22px 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .pill-btn:hover,
+  .pill-btn:active {
+    transform: none;
+  }
+}
