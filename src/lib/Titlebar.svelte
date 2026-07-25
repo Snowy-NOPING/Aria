@@ -251,7 +251,12 @@
   }
 </script>
 
-<div class="titlebar">
+<!-- `deep` makes the whole bar draggable, including its layout containers and
+     labels. Tauri exempts interactive descendants (buttons, inputs, and
+     anything with an interactive role or a focusable tabindex — the seek bar),
+     so grabbing empty chrome moves the window while every control still takes
+     its own clicks. Double-clicking the bar maximizes/restores. -->
+<div class="titlebar" data-tauri-drag-region="deep">
   <div class="left">
     <div
       class="window-controls"
@@ -290,7 +295,7 @@
       </button>
     </div>
 
-    <div class="brand" data-tauri-drag-region>Aria</div>
+    <div class="brand">Aria</div>
 
     <div class="transport">
       <button

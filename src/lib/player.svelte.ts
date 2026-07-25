@@ -36,10 +36,16 @@ const ANALYZER_BANDS: [number, number][] = [
   [9, 26],
   [26, 72],
 ];
-/** Per-band gain — higher bands carry much less energy in real music. */
-const BAND_GAIN = [1.0, 1.2, 1.55, 2.1];
+/** Per-band gain — higher bands carry less energy in real music. */
+const BAND_GAIN = [1.0, 1.1, 1.3, 1.6];
 /** Shape used when only a single RMS level is available (rodio backend). */
 const BAND_SHAPE = [1.0, 0.9, 0.74, 0.58];
+/** Everything below this much of the analyser's range reads as silence. Without
+ *  it, ordinary mastered music sits near the top of the scale and the bars
+ *  just stay pinned. */
+const BAND_FLOOR = 0.34;
+/** >1 expands the range, so only genuinely loud content reaches full height. */
+const BAND_CURVE = 1.45;
 
 function extOf(path: string): string {
   return path.split(".").pop()?.toLowerCase() ?? "";
@@ -252,7 +258,10 @@ class Player {
       const end = Math.min(to, spectrum.length);
       for (let bin = from; bin < end; bin++) sum += spectrum[bin];
       const avg = end > from ? sum / (end - from) / 255 : 0;
-      return Math.min(1, Math.pow(avg, 0.72) * BAND_GAIN[band]);
+      // Cut the floor away first, then expand what's left — otherwise every
+      // band sits in the top third of the scale for the whole track.
+      const above = Math.max(0, (avg - BAND_FLOOR) / (1 - BAND_FLOOR));
+      return Math.min(1, Math.pow(above, BAND_CURVE) * BAND_GAIN[band]);
     });
     this.pushBands(targets);
   }
@@ -261,10 +270,13 @@ class Player {
    *  bands with a slow drift — close enough to read as a live analyzer. */
   private updateBandsFromLevel(rawLevel: number) {
     const level = Math.max(0, Math.min(1, rawLevel));
+    // Same expansion as the spectrum path, so both backends peak (and idle) at
+    // comparable heights instead of one of them sitting pinned.
+    const expanded = Math.pow(Math.max(0, (level - 0.08) / 0.92), 1.35) * 1.5;
     this.bandPhase += 0.42;
     const targets = BAND_SHAPE.map((shape, band) => {
       const drift = 0.78 + 0.3 * Math.sin(this.bandPhase * (0.7 + 0.29 * band) + band * 1.9);
-      return Math.min(1, Math.pow(level, 0.6) * shape * drift * 1.15);
+      return Math.min(1, expanded * shape * drift);
     });
     this.pushBands(targets);
   }
@@ -282,6 +294,10 @@ class Player {
       const analyser = context.createAnalyser();
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.62;
+      // Narrower than the -100/-30 dB default: the bottom of the range is
+      // inaudible detail that only served to keep the bars lit.
+      analyser.minDecibels = -76;
+      analyser.maxDecibels = -14;
       source.connect(analyser);
       analyser.connect(context.destination);
       this.audioContext = context;
