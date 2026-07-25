@@ -128,6 +128,31 @@ fn image_to_data_uri(path: String) -> Result<String, String> {
     Ok(format!("data:{mime};base64,{b64}"))
 }
 
+/// Apply (or clear) a native Windows DWM backdrop on the main window.
+///
+/// `mica` / `mica-alt` (tabbed) / `acrylic` / `blur` ask DWM to composite the
+/// desktop behind our transparent webview. `none` paints our own opaque base,
+/// and `external` clears every native effect so a third-party compositor —
+/// Mica For Everyone — owns the backdrop instead of us fighting it.
+#[tauri::command]
+fn set_backdrop(window: tauri::WebviewWindow, kind: String) -> Result<(), String> {
+    use tauri::window::{Effect, EffectsBuilder};
+
+    let effect = match kind.as_str() {
+        "mica" => Some(Effect::Mica),
+        "mica-light" => Some(Effect::MicaLight),
+        "mica-dark" => Some(Effect::MicaDark),
+        "mica-alt" | "tabbed" => Some(Effect::Tabbed),
+        "acrylic" => Some(Effect::Acrylic),
+        "blur" => Some(Effect::Blur),
+        "none" | "external" => None,
+        other => return Err(format!("unknown backdrop: {other}")),
+    };
+
+    let config = effect.map(|e| EffectsBuilder::new().effect(e).build());
+    window.set_effects(config).map_err(|e| e.to_string())
+}
+
 /// Update the OS "now playing" metadata (SMTC).
 #[tauri::command]
 fn smtc_metadata(app: AppHandle, title: String, artist: String, album: String, duration: f64) {
@@ -240,6 +265,12 @@ pub fn run() {
             app.manage(media::Smtc::new());
             app.manage(lastfm::LastFm::new(app.handle()));
             media::init(app.handle());
+
+            // The window stays `transparent` (see tauri.conf.json). We don't
+            // force a backdrop at startup — the frontend restores the user's
+            // saved choice (`set_backdrop`) once it boots, and the "external"
+            // choice deliberately applies nothing so a third-party compositor
+            // (Mica For Everyone) owns the backdrop instead of us fighting it.
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -251,6 +282,7 @@ pub fn run() {
             image_to_data_uri,
             scan_folder,
             fetch_lyrics,
+            set_backdrop,
             smtc_metadata,
             smtc_playback,
             load_data,

@@ -36,9 +36,14 @@
     inset: 0;
     overflow: hidden;
     isolation: isolate;
+    /* The radial gradient and blobs don't cover every pixel, so the base fill
+       underneath keeps the gaps from reading as flat black. With a backdrop
+       active that base is transparent and the whole wash fades to
+       `--wash-opacity` so the Mica/Acrylic material shows through it. */
     background:
       radial-gradient(circle at 50% 45%, var(--art-primary), transparent 70%),
-      var(--art-deep);
+      var(--app-base);
+    opacity: var(--wash-opacity);
     pointer-events: none;
   }
 

@@ -72,8 +72,8 @@
     flex-direction: column;
     overflow: hidden;
     color: var(--text);
-    background: color-mix(in srgb, var(--sidebar) 74%, transparent);
-    backdrop-filter: blur(30px) saturate(1.35);
+    background: var(--chrome-tint);
+    backdrop-filter: var(--chrome-blur);
     border-left: 1px solid var(--border);
   }
   header {

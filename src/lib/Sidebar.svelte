@@ -83,8 +83,6 @@
   data-tauri-drag-region
   aria-label="Primary navigation"
 >
-  <div class="brand">Aria</div>
-
   <label class="search">
     <SidebarIcon name="search" size={16} />
     <input
@@ -189,22 +187,14 @@
   .sidebar {
     flex-shrink: 0;
     min-width: 190px;
-    background: color-mix(in srgb, var(--sidebar) 88%, var(--art-primary) 12%);
-    backdrop-filter: blur(34px) saturate(1.45);
+    background: var(--chrome-tint);
+    backdrop-filter: var(--chrome-blur);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     padding: 14px 12px 12px;
     gap: 9px;
     overflow: hidden;
-  }
-  .brand {
-    height: 28px;
-    padding: 2px 8px;
-    color: var(--text);
-    font-size: 17px;
-    font-weight: 800;
-    letter-spacing: -0.4px;
   }
   .search {
     min-height: 36px;

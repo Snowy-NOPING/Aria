@@ -53,7 +53,10 @@
   {#if !album}
     <div class="note">Album not found.</div>
   {:else}
-    <button class="back" onclick={() => nav.go("albums")}>‹ Albums</button>
+    <button class="back" onclick={() => nav.go("albums")}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+      <span>Albums</span>
+    </button>
     <div class="hero">
       <button class="cover" onclick={pickCover} title="Change cover">
         <Artwork src={cover} size="clamp(240px, 28vw, 360px)" radius="10px" />
@@ -106,10 +109,23 @@
 
 <style>
   .back {
-    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-dim);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 14px 6px 10px;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 650;
     margin-bottom: 16px;
+    transition: background 0.15s, color 0.15s, transform 220ms var(--motion-spring);
+  }
+  .back:hover {
+    color: var(--text);
+    background: var(--hover);
+    transform: translateX(-1px);
   }
   .hero {
     display: flex;

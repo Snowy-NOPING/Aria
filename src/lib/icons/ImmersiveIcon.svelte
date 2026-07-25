@@ -14,7 +14,9 @@
       | "next"
       | "repeat"
       | "volume"
-      | "more";
+      | "more"
+      | "sidebar"
+      | "browser";
     size?: number;
   } = $props();
 </script>
@@ -31,8 +33,10 @@
   aria-hidden="true"
 >
   {#if name === "exit"}
-    <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
-    <path d="m4 9 6-6M20 9l-6-6M4 15l6 6M20 15l-6 6" />
+    <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+    <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+    <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+    <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
   {:else if name === "queue"}
     <path d="M4 6h11M4 12h8M4 18h8" />
     <path d="M17 11v7.5a2.5 2.5 0 1 1-2-2.45" />
@@ -63,5 +67,12 @@
     <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
     <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
     <circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" />
+  {:else if name === "sidebar"}
+    <rect x="3" y="4" width="18" height="16" rx="3" />
+    <line x1="9" y1="4" x2="9" y2="20" />
+  {:else if name === "browser"}
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <line x1="3" y1="9.5" x2="21" y2="9.5" />
+    <circle cx="6.3" cy="7.2" r="0.6" fill="currentColor" stroke="none" />
   {/if}
 </svg>

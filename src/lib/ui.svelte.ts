@@ -5,6 +5,11 @@ class UI {
   immersive = $state(false);
   /** Side panels inside immersive. */
   panel = $state<"none" | "queue" | "lyrics">("none");
+  /** Remembers which immersive panel was last shown, so reopening (e.g. by
+   * clicking the artwork) restores it instead of always defaulting. */
+  lastPanel = $state<"queue" | "lyrics">("lyrics");
+  /** Library browser overlay inside immersive mode. */
+  browserOpen = $state(false);
   /** Persistent panel beside the normal library view. */
   sidePanel = $state<"none" | "queue" | "lyrics">("lyrics");
 
@@ -25,6 +30,7 @@ class UI {
     }
     this.immersive = false;
     this.panel = "none";
+    this.browserOpen = false;
   }
 
   async toggle() {
@@ -34,6 +40,16 @@ class UI {
 
   togglePanel(p: "queue" | "lyrics") {
     this.panel = this.panel === p ? "none" : p;
+    if (this.panel !== "none") this.lastPanel = this.panel;
+  }
+
+  /** Opens the last-used immersive panel (lyrics by default), or closes it. */
+  toggleArtworkPanel() {
+    this.panel = this.panel === "none" ? this.lastPanel : "none";
+  }
+
+  toggleBrowser() {
+    this.browserOpen = !this.browserOpen;
   }
 
   toggleSidePanel(panel: "queue" | "lyrics") {

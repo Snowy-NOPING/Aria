@@ -5,6 +5,7 @@
   import { library } from "$lib/library.svelte";
   import { layout } from "$lib/layout.svelte";
   import { lastfm } from "$lib/lastfm.svelte";
+  import { theme } from "$lib/theme.svelte";
 
   let { children } = $props();
 
@@ -18,6 +19,7 @@
   }
 
   onMount(() => {
+    theme.load();
     layout.load();
     player.init();
     library.load();

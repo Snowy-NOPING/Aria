@@ -6,12 +6,15 @@
   import Artwork from "$lib/Artwork.svelte";
   import LyricsPanel from "$lib/LyricsPanel.svelte";
   import ImmersiveIcon from "$lib/icons/ImmersiveIcon.svelte";
+  import Sidebar from "$lib/Sidebar.svelte";
+  import MainView from "$lib/MainView.svelte";
 
   let seeking = $state(false);
   let seekValue = $state(0);
   let idle = $state(false);
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let lastWake = 0;
+  let menuOpen = $state(false);
 
   const pos = $derived(seeking ? seekValue : player.position);
   const progress = $derived(player.duration > 0 ? (pos / player.duration) * 100 : 0);
@@ -38,6 +41,7 @@
 
   function choosePanel(panel: "none" | "queue" | "lyrics") {
     ui.panel = panel;
+    if (panel !== "none") ui.lastPanel = panel;
     wake(true);
   }
 
@@ -97,38 +101,51 @@
   <div class="scrim"></div>
 
   {#if !idle}
-    <nav class="view-switcher" aria-label="Immersive view" transition:fade={{ duration: 160 }}>
+    <div class="menu-wrap" transition:fade={{ duration: 160 }}>
       <button
-        class="view-button"
-        class:selected={ui.panel === "none"}
-        title="Artwork"
-        aria-label="Artwork view"
-        aria-pressed={ui.panel === "none"}
-        onclick={() => choosePanel("none")}
+        class="menu-button"
+        class:selected={menuOpen}
+        title="Menu"
+        aria-label="Immersive menu"
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
+        onclick={() => (menuOpen = !menuOpen)}
       >
-        <span class="artwork-icon"></span>
+        <ImmersiveIcon name="sidebar" size={18} />
       </button>
-      <button
-        class="view-button"
-        class:selected={ui.panel === "queue"}
-        title="Queue"
-        aria-label="Queue view"
-        aria-pressed={ui.panel === "queue"}
-        onclick={() => choosePanel("queue")}
-      >
-        <ImmersiveIcon name="queue" size={18} />
-      </button>
-      <button
-        class="view-button"
-        class:selected={ui.panel === "lyrics"}
-        title="Lyrics"
-        aria-label="Lyrics view"
-        aria-pressed={ui.panel === "lyrics"}
-        onclick={() => choosePanel("lyrics")}
-      >
-        <ImmersiveIcon name="lyrics" size={18} />
-      </button>
-    </nav>
+      {#if menuOpen}
+        <button
+          class="menu-scrim"
+          aria-label="Close menu"
+          onclick={() => (menuOpen = false)}
+        ></button>
+        <div class="menu" role="menu" transition:fade={{ duration: 120 }}>
+          <button
+            class="menu-item"
+            role="menuitem"
+            onclick={() => {
+              menuOpen = false;
+              ui.exit();
+            }}
+          >
+            <ImmersiveIcon name="exit" size={16} />
+            <span>Exit Immersive</span>
+          </button>
+          <button
+            class="menu-item"
+            role="menuitem"
+            class:selected={ui.browserOpen}
+            onclick={() => {
+              menuOpen = false;
+              ui.toggleBrowser();
+            }}
+          >
+            <ImmersiveIcon name="browser" size={16} />
+            <span>Browser</span>
+          </button>
+        </div>
+      {/if}
+    </div>
 
     <button
       class="exit-button"
@@ -143,14 +160,22 @@
 
   <main class="stage">
     <section class="player-column" aria-label="Now playing">
-      <div class="art-hero">
+      <button
+        class="art-hero"
+        title={ui.panel === "none" ? "Show lyrics/queue" : "Hide panel"}
+        aria-label={ui.panel === "none" ? "Show lyrics or queue" : "Hide panel"}
+        onclick={() => {
+          ui.toggleArtworkPanel();
+          wake(true);
+        }}
+      >
         <Artwork
           src={player.current?.art}
           size="100%"
           radius="8px"
           kind={player.current?.kind ?? "audio"}
         />
-      </div>
+      </button>
 
       <div class="transport" class:transport-idle={idle}>
         {#if !idle}
@@ -318,6 +343,27 @@
       </button>
     </div>
   {/if}
+
+  {#if ui.browserOpen}
+    <div class="browser-overlay" transition:fade={{ duration: 200 }}>
+      <div class="browser-panel">
+        <button
+          class="browser-close"
+          title="Close browser"
+          aria-label="Close browser"
+          onclick={() => ui.toggleBrowser()}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+        <div class="browser-body">
+          <Sidebar />
+          <div class="browser-main">
+            <MainView />
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -370,7 +416,6 @@
     pointer-events: none;
   }
 
-  .view-switcher,
   .panel-toggle {
     display: flex;
     align-items: center;
@@ -380,14 +425,6 @@
     backdrop-filter: blur(28px) saturate(1.35);
     box-shadow: 0 12px 35px rgba(25, 8, 17, 0.2);
   }
-  .view-switcher {
-    position: absolute;
-    top: 28px;
-    left: 32px;
-    z-index: 5;
-    border-radius: 999px;
-  }
-  .view-button,
   .panel-toggle button {
     width: 42px;
     height: 36px;
@@ -400,30 +437,83 @@
       color 180ms ease,
       transform 220ms var(--motion-spring);
   }
-  .view-button:hover,
   .panel-toggle button:hover {
     color: #fff;
     background: rgba(255, 255, 255, 0.1);
     transform: scale(1.06);
   }
-  .view-button.selected,
   .panel-toggle button.selected {
     color: #fff;
     background: rgba(255, 255, 255, 0.16);
   }
-  .artwork-icon {
-    width: 17px;
-    height: 17px;
-    border: 1.8px solid currentColor;
-    border-radius: 3px;
-    position: relative;
-  }
-  .artwork-icon::after {
-    content: "";
+  .menu-wrap {
     position: absolute;
-    inset: 3px;
-    border: 1.5px solid currentColor;
-    border-radius: 50%;
+    top: 28px;
+    left: 32px;
+    z-index: 6;
+  }
+  .menu-button {
+    width: 42px;
+    height: 36px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    color: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: var(--immersive-glass);
+    backdrop-filter: blur(28px) saturate(1.35);
+    box-shadow: 0 12px 35px rgba(25, 8, 17, 0.2);
+    transition:
+      background 180ms ease,
+      color 180ms ease,
+      transform 220ms var(--motion-spring);
+  }
+  .menu-button:hover,
+  .menu-button.selected {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.16);
+  }
+  .menu-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    background: transparent;
+  }
+  .menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 190px;
+    padding: 6px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(28, 16, 24, 0.82);
+    backdrop-filter: blur(28px) saturate(1.35);
+    box-shadow: 0 16px 45px rgba(15, 5, 10, 0.35);
+  }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .menu-item:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .menu-item.selected {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.16);
   }
   .exit-button {
     position: absolute;
@@ -483,8 +573,20 @@
     transform: translateY(2.5vh);
   }
   .art-hero {
+    display: block;
     width: 100%;
     aspect-ratio: 1;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    transition: transform 220ms var(--motion-spring);
+  }
+  .art-hero:hover {
+    transform: scale(1.008);
+  }
+  .art-hero:active {
+    transform: scale(0.992);
   }
   .art-hero :global(.art) {
     width: 100% !important;
@@ -875,7 +977,7 @@
       left: 50%;
       bottom: 16px;
     }
-    .view-switcher {
+    .menu-wrap {
       top: 16px;
       left: 16px;
     }
@@ -883,21 +985,73 @@
       top: 16px;
       right: 16px;
     }
+    .browser-panel {
+      right: 3%;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .stage,
     .player-column,
-    .view-button,
+    .menu-button,
     .panel-toggle button,
     .exit-button,
     .control,
     .now-card,
-    .queue-row {
+    .queue-row,
+    .art-hero {
       transition: none;
     }
     .idle .player-column {
       transform: none;
     }
+  }
+
+  .browser-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+  }
+  .browser-panel {
+    position: absolute;
+    inset: 4vh 8% 4vh 4vw;
+    display: flex;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--bg-deep);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 30px 90px rgba(5, 2, 6, 0.5);
+  }
+  .browser-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--text-dim);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .browser-close:hover {
+    color: var(--text);
+    background: var(--hover);
+  }
+  .browser-body {
+    display: flex;
+    width: 100%;
+    height: 100%;
+  }
+  .browser-main {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(22px) saturate(1.08);
   }
 </style>

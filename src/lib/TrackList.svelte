@@ -126,7 +126,7 @@
         {#if isCurrent(track)}
           <NowPlayingWaveform
             playing={player.playing && dragFrom !== i}
-            levels={player.waveformLevels}
+            bands={player.analyzerBands}
           />
         {:else}
           <span class="idx">{i + 1}</span>

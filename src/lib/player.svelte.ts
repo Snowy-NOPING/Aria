@@ -27,6 +27,20 @@ interface StatusEvent {
 
 const AUDIO_EXTS = ["mp3", "flac", "wav", "ogg", "oga", "m4a", "aac", "opus"];
 
+/** Apple Music's now-playing indicator is four bars — bass → treble.
+ *  FFT bin ranges (fftSize 512, so ~86–94 Hz per bin) roughly covering
+ *  low bass, low mid, mid, and presence. */
+const ANALYZER_BANDS: [number, number][] = [
+  [1, 3],
+  [3, 9],
+  [9, 26],
+  [26, 72],
+];
+/** Per-band gain — higher bands carry much less energy in real music. */
+const BAND_GAIN = [1.0, 1.2, 1.55, 2.1];
+/** Shape used when only a single RMS level is available (rodio backend). */
+const BAND_SHAPE = [1.0, 0.9, 0.74, 0.58];
+
 function extOf(path: string): string {
   return path.split(".").pop()?.toLowerCase() ?? "";
 }
@@ -51,7 +65,8 @@ class Player {
   playing = $state(false);
   loaded = $state(false);
   volume = $state(1);
-  waveformLevels = $state([0, 0, 0, 0, 0]);
+  /** Four per-frequency-band levels (0–1) driving the now-playing analyzer. */
+  analyzerBands = $state([0, 0, 0, 0]);
 
   /** True while the user is dragging the seek bar (suppress incoming updates). */
   scrubbing = $state(false);
@@ -68,8 +83,10 @@ class Player {
   private raf = 0;
   private audioContext: AudioContext | null = null;
   private webAnalyser: AnalyserNode | null = null;
-  private webWaveData: Uint8Array | null = null;
-  private smoothedLevel = 0;
+  private webFreqData: Uint8Array | null = null;
+  private bandLevels = [0, 0, 0, 0];
+  /** Drives the per-band offsets of the synthesized (rodio) fallback. */
+  private bandPhase = 0;
   /** Paths that must use the WebView2 backend (rodio failed to decode them). */
   private forceWeb = new Set<string>();
   /** Position (s) to resume at once the web backend has loaded. */
@@ -98,7 +115,7 @@ class Player {
       if (s.duration > 0) this.duration = s.duration;
       this.playing = s.playing;
       this.loaded = s.loaded;
-      if (s.playing) this.updateWaveform(s.level);
+      if (s.playing) this.updateBandsFromLevel(s.level);
       else this.clearWaveform();
     });
 
@@ -217,22 +234,44 @@ class Player {
     this.audio = el;
   }
 
-  private updateWaveform(rawLevel: number) {
-    const target = this.playing ? Math.max(0, Math.min(1, rawLevel)) : 0;
-    const smoothing = target > this.smoothedLevel ? 0.58 : 0.24;
-    this.smoothedLevel += (target - this.smoothedLevel) * smoothing;
-    this.waveformLevels = [
-      this.waveformLevels[1],
-      this.waveformLevels[2],
-      this.waveformLevels[3],
-      this.waveformLevels[4],
-      this.smoothedLevel,
-    ];
+  /** Push new band targets through a fast-attack / slow-release envelope, so
+   *  the bars snap up on transients and settle back the way Apple's do. */
+  private pushBands(targets: number[]) {
+    for (let i = 0; i < 4; i++) {
+      const target = this.playing ? Math.max(0, Math.min(1, targets[i])) : 0;
+      const smoothing = target > this.bandLevels[i] ? 0.6 : 0.16;
+      this.bandLevels[i] += (target - this.bandLevels[i]) * smoothing;
+    }
+    this.analyzerBands = [...this.bandLevels];
+  }
+
+  /** Split the spectrum into the four display bands. */
+  private updateBandsFromSpectrum(spectrum: Uint8Array) {
+    const targets = ANALYZER_BANDS.map(([from, to], band) => {
+      let sum = 0;
+      const end = Math.min(to, spectrum.length);
+      for (let bin = from; bin < end; bin++) sum += spectrum[bin];
+      const avg = end > from ? sum / (end - from) / 255 : 0;
+      return Math.min(1, Math.pow(avg, 0.72) * BAND_GAIN[band]);
+    });
+    this.pushBands(targets);
+  }
+
+  /** The rodio backend only reports one RMS level, so fan it out across the
+   *  bands with a slow drift — close enough to read as a live analyzer. */
+  private updateBandsFromLevel(rawLevel: number) {
+    const level = Math.max(0, Math.min(1, rawLevel));
+    this.bandPhase += 0.42;
+    const targets = BAND_SHAPE.map((shape, band) => {
+      const drift = 0.78 + 0.3 * Math.sin(this.bandPhase * (0.7 + 0.29 * band) + band * 1.9);
+      return Math.min(1, Math.pow(level, 0.6) * shape * drift * 1.15);
+    });
+    this.pushBands(targets);
   }
 
   private clearWaveform() {
-    this.smoothedLevel = 0;
-    this.waveformLevels = [0, 0, 0, 0, 0];
+    this.bandLevels = [0, 0, 0, 0];
+    this.analyzerBands = [0, 0, 0, 0];
   }
 
   private ensureWebAnalyser() {
@@ -241,29 +280,23 @@ class Player {
       const context = new AudioContext();
       const source = context.createMediaElementSource(this.audio);
       const analyser = context.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.45;
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.62;
       source.connect(analyser);
       analyser.connect(context.destination);
       this.audioContext = context;
       this.webAnalyser = analyser;
-      this.webWaveData = new Uint8Array(analyser.fftSize);
+      this.webFreqData = new Uint8Array(analyser.frequencyBinCount);
     } catch (error) {
       // Analysis must never block playback if a WebView lacks Web Audio.
-      console.warn("real-time waveform analyser unavailable:", error);
+      console.warn("real-time spectrum analyser unavailable:", error);
     }
   }
 
   private sampleWebWaveform() {
-    if (!this.webAnalyser || !this.webWaveData) return;
-    this.webAnalyser.getByteTimeDomainData(this.webWaveData);
-    let sumSquares = 0;
-    for (const byte of this.webWaveData) {
-      const sample = (byte - 128) / 128;
-      sumSquares += sample * sample;
-    }
-    const rms = Math.sqrt(sumSquares / this.webWaveData.length);
-    this.updateWaveform(Math.min(1, Math.pow(rms, 0.45) * 1.7));
+    if (!this.webAnalyser || !this.webFreqData) return;
+    this.webAnalyser.getByteFrequencyData(this.webFreqData);
+    this.updateBandsFromSpectrum(this.webFreqData);
   }
 
   /** Drive position from the <audio> element while the web backend plays. */

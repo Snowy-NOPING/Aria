@@ -33,6 +33,26 @@
   --dynamic-bg-brightness: 45%;
   --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --motion-spring-strong: cubic-bezier(0.34, 1.7, 0.64, 1);
+
+  /* Shared chrome translucency — every frosted surface (titlebar, sidebar,
+     side panels) reads from the same tint/blur so they look like one
+     material instead of a patchwork of different opacities. */
+  --chrome-tint: color-mix(in srgb, var(--sidebar) 80%, var(--art-primary) 8%);
+  --chrome-blur: blur(32px) saturate(1.4);
+
+  /* Backdrop composition (see theme.svelte.ts). By default Aria paints its own
+     opaque artwork field; when a Mica/Acrylic backdrop is active — ours or
+     Mica For Everyone's — the base fills drop out and every surface thins so
+     the OS material actually reads through the window. */
+  --app-base: var(--art-deep);
+  --wash-opacity: 1;
+  --content-alpha: 72%;
+}
+
+html[data-translucent="true"] {
+  --app-base: transparent;
+  --content-alpha: 30%;
+  --chrome-tint: color-mix(in srgb, var(--sidebar) 46%, var(--art-primary) 7%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -69,7 +89,7 @@ body {
 
 body {
   font-family: var(--font);
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;

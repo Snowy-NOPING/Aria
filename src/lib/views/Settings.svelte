@@ -2,6 +2,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { library } from "$lib/library.svelte";
   import { lastfm } from "$lib/lastfm.svelte";
+  import { theme, BACKDROPS } from "$lib/theme.svelte";
 
   let apiSecret = $state("");
 
@@ -17,6 +18,57 @@
 
 <div class="view">
   <div class="view-title">Settings</div>
+
+  <section>
+    <h2>Appearance</h2>
+    <p class="desc">
+      Aria's window is transparent, so it can either paint its own artwork field or let a
+      blurred material show through. Pick <strong>Mica For Everyone</strong> if you use that
+      tool — Aria then applies no backdrop of its own and simply gets out of its way.
+    </p>
+
+    <div class="backdrops" role="radiogroup" aria-label="Window backdrop">
+      {#each BACKDROPS as option}
+        <button
+          class="backdrop"
+          class:on={theme.backdrop === option.id}
+          role="radio"
+          aria-checked={theme.backdrop === option.id}
+          onclick={() => theme.setBackdrop(option.id)}
+        >
+          <span class="swatch" data-preview={option.id}></span>
+          <strong>{option.label}</strong>
+          <small>{option.hint}</small>
+        </button>
+      {/each}
+    </div>
+
+    <label class="wash-row">
+      <span>
+        <strong>Artwork wash</strong>
+        <small>How strongly the album-colour field is painted over the backdrop.</small>
+      </span>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        aria-label="Artwork wash strength"
+        value={theme.wash}
+        oninput={(e) => theme.setWash(+(e.target as HTMLInputElement).value)}
+      />
+      <span class="wash-value">{Math.round(theme.wash * 100)}%</span>
+    </label>
+
+    {#if theme.lastError}
+      <div class="feedback">
+        <span class="error" role="alert">
+          Windows refused that backdrop ({theme.lastError}). The window stays transparent, so an
+          external compositor can still paint behind it.
+        </span>
+      </div>
+    {/if}
+  </section>
 
   <section>
     <div class="sec-head">
@@ -240,6 +292,107 @@
     margin-top: 14px;
     font-size: 12px;
     color: var(--text-faint);
+  }
+  .backdrops {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .backdrop {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 10px 12px 12px;
+    text-align: left;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    transition:
+      border-color 0.15s,
+      background 0.15s,
+      transform 220ms var(--motion-spring);
+  }
+  .backdrop:hover {
+    background: var(--hover);
+    transform: translateY(-1px);
+  }
+  .backdrop.on {
+    border-color: var(--accent);
+    background: var(--active);
+  }
+  .backdrop strong {
+    font-size: 13px;
+  }
+  .backdrop small {
+    color: var(--text-dim);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .swatch {
+    width: 100%;
+    height: 38px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background:
+      linear-gradient(135deg, var(--art-primary), var(--art-tertiary));
+  }
+  .swatch[data-preview="mica"] {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--art-primary) 45%, transparent),
+        color-mix(in srgb, var(--art-tertiary) 45%, transparent)),
+      repeating-linear-gradient(45deg, var(--hover) 0 6px, var(--surface) 6px 12px);
+  }
+  .swatch[data-preview="mica-alt"] {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--art-primary) 70%, transparent),
+        color-mix(in srgb, var(--art-secondary) 70%, transparent)),
+      repeating-linear-gradient(45deg, var(--hover) 0 6px, var(--surface) 6px 12px);
+  }
+  .swatch[data-preview="acrylic"] {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--art-secondary) 30%, transparent),
+        color-mix(in srgb, var(--art-primary) 30%, transparent)),
+      repeating-linear-gradient(45deg, var(--active) 0 4px, transparent 4px 8px);
+  }
+  .swatch[data-preview="external"] {
+    background: repeating-conic-gradient(var(--hover) 0 25%, transparent 0 50%) 0 0 / 12px 12px;
+  }
+  .wash-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 12px;
+    min-height: 54px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+  }
+  .wash-row > span:first-child {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .wash-row strong {
+    font-size: 13px;
+  }
+  .wash-row small {
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .wash-row input {
+    width: 160px;
+    accent-color: var(--accent);
+  }
+  .wash-value {
+    width: 40px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
   }
   .credential-grid {
     display: grid;
