@@ -34,9 +34,17 @@ class Theme {
   /** Last error from applying a native effect (unsupported build of Windows). */
   lastError = $state("");
 
+  /** Temporarily forced opaque (immersive mode) without losing the choice. */
+  suspended = $state(false);
+
+  /** What's actually applied right now, honouring a suspend. */
+  get effective(): Backdrop {
+    return this.suspended ? "opaque" : this.backdrop;
+  }
+
   /** True when the window is see-through and something behind it shows. */
   get translucent() {
-    return this.backdrop !== "opaque";
+    return this.effective !== "opaque";
   }
 
   load() {
@@ -45,7 +53,7 @@ class Theme {
       if (b && BACKDROPS.some((o) => o.id === b)) this.backdrop = b;
       const w = localStorage.getItem("aria.wash");
       if (w !== null) this.wash = clamp01(+w);
-      else if (this.translucent) this.wash = 0.55;
+      else if (this.backdrop !== "opaque") this.wash = 0.55;
     } catch {
       /* first run / storage blocked — defaults are fine */
     }
@@ -53,13 +61,16 @@ class Theme {
   }
 
   async setBackdrop(backdrop: Backdrop) {
-    const wasTranslucent = this.translucent;
+    // Compare the chosen values, not the effective ones — a suspend must not
+    // make this look like a switch to opaque and reset the wash.
+    const wasTranslucent = this.backdrop !== "opaque";
+    const nowTranslucent = backdrop !== "opaque";
     this.backdrop = backdrop;
     // Moving between opaque and see-through wants a different default wash:
     // full strength when we're the only thing painting, dialled back when the
     // backdrop needs to read through it.
-    if (wasTranslucent !== this.translucent) {
-      this.wash = this.translucent ? 0.55 : 1;
+    if (wasTranslucent !== nowTranslucent) {
+      this.wash = nowTranslucent ? 0.55 : 1;
     }
     this.persist();
     await this.apply();
@@ -82,16 +93,30 @@ class Theme {
 
   private applyCss() {
     const root = document.documentElement;
-    root.dataset.backdrop = this.backdrop;
+    root.dataset.backdrop = this.effective;
     root.dataset.translucent = String(this.translucent);
     root.style.setProperty("--wash-opacity", String(this.wash));
+  }
+
+  /** Drop the backdrop without forgetting the user's choice (immersive mode). */
+  async suspend() {
+    if (this.suspended) return;
+    this.suspended = true;
+    await this.apply();
+  }
+
+  /** Restore the saved backdrop after a suspend. */
+  async resume() {
+    if (!this.suspended) return;
+    this.suspended = false;
+    await this.apply();
   }
 
   /** Push the current choice to CSS and to the native window. */
   async apply() {
     this.applyCss();
     try {
-      await invoke("set_backdrop", { kind: this.backdrop });
+      await invoke("set_backdrop", { kind: this.effective });
       this.lastError = "";
     } catch (error) {
       // A missing DWM backdrop must never break the app — we simply stay

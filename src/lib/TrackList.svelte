@@ -225,6 +225,10 @@
   .list {
     display: flex;
     flex-direction: column;
+    /* Container, not viewport: the list's width depends on the sidebar and the
+       side panel as much as on the window. */
+    container-type: inline-size;
+    container-name: tracklist;
   }
   .row {
     display: grid;
@@ -441,6 +445,32 @@
     .row.dragging,
     .row:not(.dragging):hover .thumb {
       transform: none;
+    }
+  }
+
+  /* Drop the album column, then the artist column, as the list narrows. The
+     row keeps its title, duration, and actions at every width. */
+  @container tracklist (max-width: 720px) {
+    .row {
+      grid-template-columns: 34px 2fr 1.3fr 56px 64px;
+      gap: 10px;
+    }
+    .row.art {
+      grid-template-columns: 34px 40px 2fr 1.3fr 56px 64px;
+    }
+    .cell.dim + .cell.dim {
+      display: none;
+    }
+  }
+  @container tracklist (max-width: 520px) {
+    .row {
+      grid-template-columns: 34px minmax(0, 1fr) 50px 64px;
+    }
+    .row.art {
+      grid-template-columns: 34px 40px minmax(0, 1fr) 50px 64px;
+    }
+    .cell.dim {
+      display: none;
     }
   }
 </style>

@@ -7,6 +7,7 @@
   import LyricsPanel from "$lib/LyricsPanel.svelte";
   import ImmersiveIcon from "$lib/icons/ImmersiveIcon.svelte";
   import Sidebar from "$lib/Sidebar.svelte";
+  import WindowControls from "$lib/WindowControls.svelte";
   import MainView from "$lib/MainView.svelte";
 
   let seeking = $state(false);
@@ -101,6 +102,10 @@
   <div class="scrim"></div>
 
   {#if !idle}
+    <div class="window-chrome" transition:fade={{ duration: 160 }}>
+      <WindowControls fullscreenAware />
+    </div>
+
     <div class="menu-wrap" transition:fade={{ duration: 160 }}>
       <button
         class="menu-button"
@@ -446,10 +451,17 @@
     color: #fff;
     background: rgba(255, 255, 255, 0.16);
   }
+  .window-chrome {
+    position: absolute;
+    top: 34px;
+    left: 32px;
+    z-index: 7;
+  }
   .menu-wrap {
     position: absolute;
     top: 28px;
-    left: 32px;
+    /* Clear of the window controls to its left. */
+    left: 108px;
     z-index: 6;
   }
   .menu-button {

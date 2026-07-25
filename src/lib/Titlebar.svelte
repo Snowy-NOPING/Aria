@@ -1,41 +1,13 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { nav } from "./nav.svelte";
   import { player, formatTime } from "$lib/player.svelte";
   import { ui } from "$lib/ui.svelte";
   import Artwork from "$lib/Artwork.svelte";
+  import WindowControls from "$lib/WindowControls.svelte";
   import ImmersiveIcon from "$lib/icons/ImmersiveIcon.svelte";
   import { edit } from "$lib/edit.svelte";
   import { library } from "$lib/library.svelte";
   import { contextMenu } from "$lib/contextMenuState.svelte";
-
-  let isHovered = $state(false);
-  let maximized = $state(false);
-  const appWindow = getCurrentWindow();
-
-  function minimize() {
-    void appWindow.minimize();
-  }
-
-  function toggleMaximize() {
-    void appWindow.toggleMaximize();
-  }
-
-  function close() {
-    void appWindow.close();
-  }
-
-  onMount(() => {
-    let unlisten: (() => void) | undefined;
-    appWindow.isMaximized().then((m) => (maximized = m));
-    appWindow
-      .onResized(() => {
-        void appWindow.isMaximized().then((m) => (maximized = m));
-      })
-      .then((fn) => (unlisten = fn));
-    return () => unlisten?.();
-  });
 
   function handleContextMenu(e: MouseEvent) {
     const track = player.current;
@@ -258,33 +230,7 @@
      its own clicks. Double-clicking the bar maximizes/restores. -->
 <div class="titlebar" data-tauri-drag-region="deep">
   <div class="left">
-    <div
-      class="window-controls"
-      role="group"
-      aria-label="Window controls"
-      onmouseenter={() => isHovered = true}
-      onmouseleave={() => isHovered = false}
-    >
-      <button class="window-btn close" onclick={close} aria-label="Close">
-        {#if isHovered}
-          <svg class="symbol" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
-        {/if}
-      </button>
-      <button class="window-btn minimize" onclick={minimize} aria-label="Minimize">
-        {#if isHovered}
-          <svg class="symbol" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12h14" /></svg>
-        {/if}
-      </button>
-      <button class="window-btn maximize" onclick={toggleMaximize} aria-label={maximized ? "Restore" : "Maximize"}>
-        {#if isHovered}
-          {#if maximized}
-            <svg class="symbol" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><rect x="4.5" y="8.5" width="10" height="10" rx="1.5" /><rect x="8.5" y="4.5" width="10" height="10" rx="1.5" /></svg>
-          {:else}
-            <svg class="symbol" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2" /></svg>
-          {/if}
-        {/if}
-      </button>
-    </div>
+    <WindowControls />
 
     <div class="nav-controls">
       <button class="nav-btn" onclick={() => nav.goBack()} disabled={!nav.canGoBack} aria-label="Go back">
@@ -294,8 +240,6 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
       </button>
     </div>
-
-    <div class="brand">Aria</div>
 
     <div class="transport">
       <button
@@ -382,17 +326,19 @@
   </div>
 
   <div class="right">
-    <ImmersiveIcon name="volume" size={17} />
-    <div class="slider" style="--pct:{volume}%">
-      <input
-        aria-label="Volume"
-        type="range"
-        min="0"
-        max="1"
-        step="0.01"
-        value={player.volume}
-        oninput={(e) => player.setVolume(+(e.target as HTMLInputElement).value)}
-      />
+    <div class="volume">
+      <ImmersiveIcon name="volume" size={17} />
+      <div class="slider" style="--pct:{volume}%">
+        <input
+          aria-label="Volume"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={player.volume}
+          oninput={(e) => player.setVolume(+(e.target as HTMLInputElement).value)}
+        />
+      </div>
     </div>
     <button
       class="panel-button"
@@ -435,7 +381,7 @@
        this is what was producing the flat black strip at the top. */
     z-index: 2;
     display: grid;
-    grid-template-columns: minmax(300px, 1fr) minmax(280px, 480px) minmax(210px, 1fr);
+    grid-template-columns: minmax(250px, 1fr) minmax(280px, 480px) minmax(200px, 1fr);
     align-items: center;
     gap: 14px;
     padding: 0 14px;
@@ -450,44 +396,6 @@
     align-items: center;
     gap: 14px;
     min-width: 0;
-  }
-  .window-controls {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: none;
-  }
-  .window-btn {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    border: none;
-    position: relative;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: rgba(0, 0, 0, 0.65);
-    transition: filter 0.1s ease;
-  }
-  .window-btn:hover {
-    filter: brightness(0.85);
-  }
-  .window-btn.close {
-    background-color: #ff5f56;
-    border: 0.5px solid #e0443e;
-  }
-  .window-btn.minimize {
-    background-color: #ffbd2e;
-    border: 0.5px solid #dfa123;
-  }
-  .window-btn.maximize {
-    background-color: #27c93f;
-    border: 0.5px solid #1aab29;
-  }
-  .symbol {
-    position: absolute;
   }
   .nav-controls {
     display: flex;
@@ -517,19 +425,14 @@
     cursor: default;
     opacity: 0.45;
   }
-  .brand {
-    font-size: 15px;
-    font-weight: 800;
-    letter-spacing: -0.3px;
-    color: var(--text);
-    white-space: nowrap;
-    flex: none;
-  }
   .transport {
     display: flex;
     align-items: center;
     gap: 3px;
     flex: none;
+    /* Push the transport to the end of the left column so it sits beside the
+       now-playing pill rather than stranded next to the wordmark. */
+    margin-left: auto;
   }
   .control,
   .panel-button {
@@ -698,6 +601,12 @@
     color: var(--text-dim);
     min-width: 0;
   }
+  .volume {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--text-dim);
+  }
   .slider {
     --pct: 0%;
     position: relative;
@@ -735,14 +644,44 @@
   }
   @media (max-width: 1040px) {
     .titlebar {
-      grid-template-columns: auto minmax(260px, 1fr) auto;
+      grid-template-columns: auto minmax(240px, 1fr) auto;
       gap: 8px;
     }
-    .brand,
+    /* Only the volume group folds away — hiding every svg in `.right` here
+       also emptied the lyrics/queue/immersive buttons. */
     .control.secondary,
-    .slider,
-    .right :global(svg) {
+    .volume {
       display: none;
+    }
+  }
+  /* Narrow windows: the now-playing pill is what matters, so history
+     navigation folds away and the chrome tightens up around it. */
+  @media (max-width: 880px) {
+    .titlebar {
+      height: 52px;
+      padding: 0 10px;
+      gap: 6px;
+    }
+    .nav-controls {
+      display: none;
+    }
+    .left {
+      gap: 10px;
+    }
+    .right {
+      gap: 2px;
+    }
+    .now-copy {
+      padding-right: 0;
+    }
+  }
+  @media (max-width: 720px) {
+    .now-playing :global(.art),
+    .now-copy small {
+      display: none;
+    }
+    .seek {
+      left: 10px;
     }
   }
   @media (prefers-reduced-motion: reduce) {

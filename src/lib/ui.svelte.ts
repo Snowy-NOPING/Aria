@@ -1,4 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { theme } from "./theme.svelte";
 
 /** Immersive / full-screen now-playing mode (Cider-style). */
 class UI {
@@ -13,21 +14,35 @@ class UI {
   /** Persistent panel beside the normal library view. */
   sidePanel = $state<"none" | "queue" | "lyrics">("lyrics");
 
+  /** Whether the window was already maximized before immersive took over. */
+  private wasMaximized = false;
+
   async enter() {
+    const appWindow = getCurrentWindow();
     try {
-      await getCurrentWindow().setFullscreen(true);
+      // Maximize rather than go fullscreen: an undecorated maximized window
+      // fills the work area, which keeps the taskbar visible and reachable.
+      this.wasMaximized = await appWindow.isMaximized();
+      if (await appWindow.isFullscreen()) await appWindow.setFullscreen(false);
+      if (!this.wasMaximized) await appWindow.maximize();
     } catch {
-      /* fullscreen may be unavailable; overlay still works */
+      /* window sizing may be unavailable; the overlay still works */
     }
+    // Immersive is its own opaque world — a Mica/Acrylic backdrop behind it
+    // would only bleed at the edges, so it's suspended until we exit.
+    await theme.suspend();
     this.immersive = true;
   }
 
   async exit() {
+    const appWindow = getCurrentWindow();
     try {
-      await getCurrentWindow().setFullscreen(false);
+      await appWindow.setFullscreen(false);
+      if (!this.wasMaximized) await appWindow.unmaximize();
     } catch {
       /* ignore */
     }
+    await theme.resume();
     this.immersive = false;
     this.panel = "none";
     this.browserOpen = false;

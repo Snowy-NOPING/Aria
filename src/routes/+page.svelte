@@ -18,6 +18,9 @@
   import ContextMenu from "$lib/ContextMenu.svelte";
   import MainView from "$lib/MainView.svelte";
 
+  let viewportWidth = $state(1280);
+  $effect(() => layout.setViewport(viewportWidth));
+
   let backdrop = $state<{
     key: string;
     art: string | null;
@@ -66,6 +69,8 @@
   });
 </script>
 
+<svelte:window bind:innerWidth={viewportWidth} />
+
 <div class="app">
   <Titlebar />
   <div class="background-stack" aria-hidden="true">
@@ -82,7 +87,9 @@
 
   <div class="workspace">
     <Sidebar />
-    <Resizer onmove={(x) => layout.setSidebar(x)} />
+    {#if !layout.rail}
+      <Resizer onmove={(x) => layout.setSidebar(x)} />
+    {/if}
     <section class="content-shell">
       <div class="content-row">
         <main>

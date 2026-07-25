@@ -210,8 +210,16 @@
       right: 0;
       top: 0;
       bottom: 0;
-      width: min(420px, 88vw);
+      width: min(420px, 52vw);
       box-shadow: -18px 0 55px rgba(0, 0, 0, 0.25);
+    }
+  }
+  /* Too narrow to share: the panel takes the whole content area instead of
+     squeezing the library into a leftover sliver. */
+  @media (max-width: 780px) {
+    .panel {
+      left: 0;
+      width: auto;
     }
   }
 </style>

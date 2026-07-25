@@ -1,10 +1,26 @@
 // Resizable panel sizes, persisted to localStorage.
 
+import { ui } from "./ui.svelte";
+
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 class Layout {
   sidebarWidth = $state(242);
   lyricsArtWidth = $state(340);
+  /** Window width, kept current by the shell so layout can react to it. */
+  viewportWidth = $state(1280);
+
+  /** Collapse the sidebar to an icon rail when the library would otherwise be
+   *  squeezed into a sliver — either the window is small outright, or a side
+   *  panel is open and there isn't room for both. */
+  get rail() {
+    if (this.viewportWidth <= 900) return true;
+    return ui.sidePanel !== "none" && this.viewportWidth <= 1100;
+  }
+
+  setViewport(width: number) {
+    this.viewportWidth = width;
+  }
 
   load() {
     try {

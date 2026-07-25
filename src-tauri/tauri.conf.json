@@ -15,8 +15,8 @@
         "title": "Aria",
         "width": 1100,
         "height": 720,
-        "minWidth": 860,
-        "minHeight": 560,
+        "minWidth": 680,
+        "minHeight": 480,
         "decorations": false,
         "transparent": true
       }

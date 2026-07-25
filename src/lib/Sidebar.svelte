@@ -79,7 +79,8 @@
 
 <nav
   class="sidebar"
-  style="width:{layout.sidebarWidth}px"
+  class:rail={layout.rail}
+  style="width:{layout.rail ? 62 : layout.sidebarWidth}px"
   data-tauri-drag-region
   aria-label="Primary navigation"
 >
@@ -187,6 +188,9 @@
   .sidebar {
     flex-shrink: 0;
     min-width: 190px;
+    /* max-width still clamps the inline pixel width the resizer writes, so a
+       wide sidebar can't eat a narrow window. */
+    max-width: 34vw;
     background: var(--chrome-tint);
     backdrop-filter: var(--chrome-blur);
     border-right: 1px solid var(--border);
@@ -404,5 +408,38 @@
       animation: none;
       border-style: dotted;
     }
+  }
+
+  /* Rail mode (see layout.rail): every row already leads with an icon or
+     artwork, so dropping the text stays legible. */
+  .sidebar.rail {
+    min-width: 62px;
+    padding: 12px 7px 12px;
+    align-items: center;
+  }
+  .sidebar.rail .label,
+  .sidebar.rail .pin-copy,
+  .sidebar.rail .section-head,
+  .sidebar.rail .empty-note,
+  .sidebar.rail .search input,
+  .sidebar.rail .scan-status span:not(.scan-spinner) {
+    display: none;
+  }
+  .sidebar.rail .search {
+    width: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+  .sidebar.rail .item,
+  .sidebar.rail .pin-item {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .sidebar.rail .unpin {
+    display: none;
+  }
+  .sidebar.rail .scan-status {
+    justify-content: center;
   }
 </style>
