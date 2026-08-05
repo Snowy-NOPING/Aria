@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { fade } from "svelte/transition";
   import { player } from "$lib/player.svelte";
   import { ui } from "$lib/ui.svelte";
   import { layout } from "$lib/layout.svelte";
@@ -32,27 +31,45 @@
     palette: DEFAULT_ARTWORK_PALETTE,
   });
 
-  function applyPalette(palette: ArtworkPalette) {
+  /** `null` means there is no artwork to take colour from — see `data-idle`. */
+  function applyPalette(palette: ArtworkPalette | null) {
     const root = document.documentElement;
-    const entries: [string, string][] = [
-      ["--accent", palette.accent],
-      ["--accent-2", palette.accentLight],
-      ["--art-primary", palette.primary],
-      ["--art-secondary", palette.secondary],
-      ["--art-tertiary", palette.tertiary],
-      ["--art-deep", palette.deep],
+    const entries: [string, string][] = palette
+      ? [
+          ["--accent", palette.accent],
+          ["--accent-2", palette.accentLight],
+          ["--art-primary", palette.primary],
+          ["--art-secondary", palette.secondary],
+          ["--art-tertiary", palette.tertiary],
+          ["--art-deep", palette.deep],
+        ]
+      : [];
+    // A fixed-palette skin (Claude) must not be repainted by the artwork, and
+    // neither must an idle window. These are inline properties, which outrank
+    // the stylesheet, so it isn't enough to stop writing them — the previous
+    // track's colours have to be cleared.
+    const names = [
+      "--accent",
+      "--accent-2",
+      "--art-primary",
+      "--art-secondary",
+      "--art-tertiary",
+      "--art-deep",
     ];
-    // A fixed-palette skin (Claude) must not be repainted by the artwork. These
-    // are inline properties, which outrank the stylesheet, so it isn't enough to
-    // stop writing them — the previous track's colours have to be cleared.
-    for (const [name, value] of entries) {
-      if (theme.artworkField) root.style.setProperty(name, value);
+    const values = new Map(entries);
+    for (const name of names) {
+      const value = values.get(name);
+      if (value && theme.artworkField) root.style.setProperty(name, value);
       else root.style.removeProperty(name);
     }
+    // Nothing to derive colour from: the stylesheet drops the window back to
+    // plain theme surfaces rather than tinting them toward a default palette
+    // nobody chose.
+    root.toggleAttribute("data-idle", !palette);
   }
 
-  // Keep the previous background visible until the next artwork palette is ready,
-  // then crossfade the entire colour field as one layer.
+  // Hand the field the new artwork only once its palette is ready, so the
+  // shader's dissolve and the surrounding chrome's colours move together.
   $effect(() => {
     // Read explicitly: the palette write below happens in a promise callback,
     // outside this effect's tracking scope, so a skin change would not
@@ -61,7 +78,7 @@
     const art = player.current?.art;
     const key = player.current?.path ?? art ?? "fallback";
     if (!art) {
-      applyPalette(DEFAULT_ARTWORK_PALETTE);
+      applyPalette(null);
       backdrop = {
         key: "fallback",
         art: null,
@@ -91,16 +108,13 @@
        entirely rather than rendered at zero opacity — four blurred, animating
        blobs are not free. -->
   {#if theme.artworkField}
+    <!-- One long-lived layer, not one per track: the field dissolves between
+         artworks inside the shader, and remounting it would throw away the
+         WebGL context (and the outgoing texture) on every track change. -->
     <div class="background-stack" aria-hidden="true">
-      {#key backdrop.key}
-        <div
-          class="background-frame"
-          in:fade={{ duration: 650 }}
-          out:fade={{ duration: 420 }}
-        >
-          <DynamicBackground art={backdrop.art} palette={backdrop.palette} />
-        </div>
-      {/key}
+      <div class="background-frame">
+        <DynamicBackground art={backdrop.art} palette={backdrop.palette} />
+      </div>
     </div>
   {/if}
 

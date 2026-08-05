@@ -101,20 +101,15 @@
   class:has-panel={ui.panel !== "none"}
   transition:fade={{ duration: 260 }}
 >
-  <!-- Same layer, same crossfade as the main window: a fixed-palette skin paints
-       no colour field, so the whole stack is left out rather than rendered at
-       zero opacity. -->
+  <!-- Same layer as the main window, and the same reason it isn't keyed: the
+       artwork dissolves inside the field. A fixed-palette skin paints no colour
+       field, so the whole stack is left out rather than rendered at zero
+       opacity. -->
   {#if theme.artworkField}
     <div class="background-stack" aria-hidden="true">
-      {#key backdrop.key}
-        <div
-          class="background-frame"
-          in:fade={{ duration: 650 }}
-          out:fade={{ duration: 420 }}
-        >
-          <DynamicBackground art={backdrop.art} palette={backdrop.palette} />
-        </div>
-      {/key}
+      <div class="background-frame">
+        <DynamicBackground art={backdrop.art} palette={backdrop.palette} />
+      </div>
     </div>
   {/if}
   <div class="scrim"></div>

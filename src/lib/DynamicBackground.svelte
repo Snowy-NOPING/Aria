@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ArtworkPalette } from "$lib/accent";
+  import { createArtworkField, type ArtworkField } from "$lib/artworkField";
 
   let {
     art = null,
@@ -17,23 +18,75 @@
       `--art-deep:${palette.deep}`,
     ].join(";"),
   );
+
+  let canvas = $state<HTMLCanvasElement | null>(null);
+  let field = $state<ArtworkField | null>(null);
+  /** WebGL2 missing or refused: the CSS wash below stands in for the shader. */
+  let unsupported = $state(false);
+  /** Canvas stays hidden until it has something in it, or it flashes black. */
+  let live = $state(false);
+
+  $effect(() => {
+    if (!canvas) return;
+    const made = createArtworkField(canvas);
+    if (!made) {
+      unsupported = true;
+      return;
+    }
+    field = made;
+    return () => {
+      made.destroy();
+      field = null;
+      live = false;
+    };
+  });
+
+  $effect(() => {
+    const source = art;
+    const active = field;
+    if (!active) return;
+    active.setArtwork(source);
+    if (!source) {
+      live = false;
+      return;
+    }
+    // `painted` flips inside a rAF callback, so poll a few frames for it rather
+    // than reveal the canvas before the first draw lands.
+    let raf = 0;
+    const check = () => {
+      if (active.painted()) live = true;
+      else raf = requestAnimationFrame(check);
+    };
+    check();
+    return () => cancelAnimationFrame(raf);
+  });
 </script>
 
-<div class="dynamic-background" style={paletteStyle}>
-  {#if art}
-    <!-- Two copies of the same cover drifting against each other. One alone
-         reads as a static blurred photo; counter-rotating a second, mirrored
-         copy over it keeps the colour field slowly reorganising itself without
-         ever showing a recognisable edge. -->
-    <div class="cover-wash" style="background-image:url({art})"></div>
-    <div class="cover-wash cover-wash-alt" style="background-image:url({art})"></div>
-  {/if}
-  <div class="colour-blob blob-one"></div>
-  <div class="colour-blob blob-two"></div>
-  <div class="colour-blob blob-three"></div>
-  <div class="colour-blob blob-four"></div>
-  <div class="readability-veil"></div>
-</div>
+<!-- Every layer here is made of the cover, so with nothing playing there is
+     nothing to draw: no field, no blobs, no veil. The window falls back to the
+     plain theme surface (see `html[data-idle]` in app.css) rather than a
+     gradient standing in for artwork that isn't there. -->
+{#if art}
+  <div class="dynamic-background" style={paletteStyle}>
+    {#if !unsupported}
+      <!-- The cover, crushed to a few dozen pixels and stretched back out: the
+           hardware's own interpolation is the blur, and a noise warp keeps it
+           flowing. See artworkField.ts. -->
+      <canvas class="field" class:live bind:this={canvas}></canvas>
+    {:else}
+      <!-- No WebGL2. Two copies of the same cover drifting against each other:
+           one alone reads as a static blurred photo, counter-rotating a
+           mirrored second copy keeps the field reorganising itself. -->
+      <div class="cover-wash" style="background-image:url({art})"></div>
+      <div class="cover-wash cover-wash-alt" style="background-image:url({art})"></div>
+    {/if}
+    <div class="colour-blob blob-one"></div>
+    <div class="colour-blob blob-two"></div>
+    <div class="colour-blob blob-three"></div>
+    <div class="colour-blob blob-four"></div>
+    <div class="readability-veil"></div>
+  </div>
+{/if}
 
 <style>
   .dynamic-background {
@@ -50,6 +103,21 @@
       var(--app-base);
     opacity: var(--wash-opacity);
     pointer-events: none;
+  }
+
+  /* Fades in on the first painted frame and stays; every change of artwork
+     after that is dissolved inside the shader, not by swapping this element. */
+  .field {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    opacity: 0;
+    transition: opacity 600ms ease;
+  }
+  .field.live {
+    opacity: 0.88;
   }
 
   .cover-wash {

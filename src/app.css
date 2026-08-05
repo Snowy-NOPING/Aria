@@ -204,6 +204,25 @@
   --content-alpha: calc(74% - 34% * var(--wash-opacity));
 }
 
+/* Nothing playing (or a track with no cover): there is no artwork to take
+   colour from, so the window is just the theme — flat, untinted, and in dark
+   mode genuinely dark rather than washed toward a default palette nobody chose.
+   Pointing every artwork token at `--bg` does it in one move: `--app-base`
+   resolves through `--art-deep`, and `--chrome-tint` mixes `--art-primary` into
+   the sidebar, so both land on the plain surface colour. Set by `applyPalette`
+   in +page.svelte, which also clears the inline properties that would outrank
+   this. */
+html[data-idle] {
+  --art-primary: var(--bg);
+  --art-secondary: var(--bg);
+  --art-tertiary: var(--bg);
+  --art-deep: var(--bg);
+  /* No field behind the pane, so its translucency has nothing to reveal but
+     the same colour — frosting it only costs a blur pass. */
+  --content-alpha: 100%;
+  --content-blur: none;
+}
+
 html[data-translucent="true"] {
   --app-base: transparent;
   /* Already sitting on an OS material, so it starts far thinner. */
