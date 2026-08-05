@@ -13,6 +13,7 @@
       | "pause"
       | "next"
       | "repeat"
+      | "infinity"
       | "volume"
       | "more"
       | "sidebar"
@@ -60,6 +61,9 @@
     <path d="M17 4l3 3-3 3" />
     <path d="M4 11V9a2 2 0 0 1 2-2h14M7 20l-3-3 3-3" />
     <path d="M20 13v2a2 2 0 0 1-2 2H4" />
+  {:else if name === "infinity"}
+    <!-- One continuous lemniscate: two lobes joined by a crossing at centre. -->
+    <path d="M6 16c5 0 7-8 12-8a4 4 0 0 1 0 8c-5 0-7-8-12-8a4 4 0 1 0 0 8" />
   {:else if name === "volume"}
     <path d="M5 9v6h4l5 4V5L9 9H5Z" />
     <path d="M17 9.5a4 4 0 0 1 0 5M19 7a7 7 0 0 1 0 10" />

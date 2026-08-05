@@ -61,7 +61,12 @@
     <circle cx="10.5" cy="10.5" r="6.5" />
     <path d="m15.5 15.5 4.5 4.5" />
   {:else if name === "pin"}
-    <path d="m9 3 6 6M8 8l8-2 2 2-2 8-3-3-5 5-2-2 5-5-3-3Z" />
+    <!-- Thumbtack seen side-on, symmetric about x=12: cap, neck, flange, needle.
+         Drawn upright rather than tilted so the needle never crosses the body —
+         at 16px an overlapping outline just reads as a blob. -->
+    <path d="M9 3.5h6" />
+    <path d="M10.5 3.5v5.8L7.5 13h9l-3-3.7V3.5" />
+    <path d="M12 13v7.5" />
   {:else if name === "add"}
     <path d="M12 5v14M5 12h14" />
   {/if}

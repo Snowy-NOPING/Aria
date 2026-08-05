@@ -5,7 +5,7 @@
   import AlbumCard from "$lib/AlbumCard.svelte";
 
   const recent = $derived(library.recentSongs);
-  const albums = $derived(library.albums);
+  const albums = $derived(library.allAlbums);
 
   function cover(id: string): string | null {
     const a = library.albumById(id);

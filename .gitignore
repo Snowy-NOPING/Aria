@@ -8,3 +8,12 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Apple's Developer Font Licence allows SF Pro in an interface but not
+# redistribution, and this repository is public. The files stay on disk for
+# local builds; see static/fonts/NOTICE.md. Figtree (OFL) is committed.
+static/fonts/SFPro*.woff2
+
+# Agent tooling and machine-local settings, not part of the app.
+.claude/
+.agents/

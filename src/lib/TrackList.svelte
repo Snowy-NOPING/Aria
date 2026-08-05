@@ -2,6 +2,7 @@
   import { player, formatTime, type TrackMeta } from "$lib/player.svelte";
   import { library } from "$lib/library.svelte";
   import { edit } from "$lib/edit.svelte";
+  import ArtistLink from "$lib/ArtistLink.svelte";
   import NowPlayingWaveform from "$lib/NowPlayingWaveform.svelte";
 
   let {
@@ -147,11 +148,11 @@
 
       <span class="titlecell">
         <span class="title">{track.title}</span>
-        {#if !showAlbum}<span class="sub">{track.artist}</span>{/if}
+        {#if !showAlbum}<span class="sub"><ArtistLink artist={track.artist} /></span>{/if}
       </span>
 
       {#if showAlbum}
-        <span class="cell dim">{track.artist}</span>
+        <span class="cell dim"><ArtistLink artist={track.artist} /></span>
         <span class="cell dim">{track.album}</span>
       {/if}
 
@@ -432,7 +433,7 @@
     font-weight: 600;
   }
   .menu-item.danger {
-    color: #ff5a5a;
+    color: var(--danger);
   }
   .sep {
     height: 1px;

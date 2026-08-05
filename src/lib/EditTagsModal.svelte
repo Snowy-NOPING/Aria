@@ -185,7 +185,7 @@
     border-color: var(--accent);
   }
   .error {
-    color: #ff5a5a;
+    color: var(--danger);
     font-size: 12px;
     margin: 0 0 12px;
   }

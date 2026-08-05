@@ -13,7 +13,13 @@ import { invoke } from "@tauri-apps/api/core";
 export type Backdrop = "opaque" | "mica" | "mica-alt" | "acrylic" | "external";
 
 export const BACKDROPS: { id: Backdrop; label: string; hint: string }[] = [
-  { id: "opaque", label: "Solid", hint: "Aria paints its own artwork field." },
+  {
+    id: "opaque",
+    label: "Solid",
+    // Skin-neutral: under Aria this surface is the artwork field, under Claude
+    // it's flat paper. Either way the choice is "nothing shows through".
+    hint: "Nothing shows through — the theme paints its own surface.",
+  },
   { id: "mica", label: "Mica", hint: "Desktop wallpaper, blurred by Windows." },
   { id: "mica-alt", label: "Mica Alt", hint: "Stronger, more tinted Mica." },
   { id: "acrylic", label: "Acrylic", hint: "Translucent blur of what's behind." },
@@ -24,9 +30,33 @@ export const BACKDROPS: { id: Backdrop; label: string; hint: string }[] = [
   },
 ];
 
+/**
+ * Visual skin — the palette, type and surface treatment.
+ *
+ * - `aria`   — the house look: artwork-driven colour, frosted chrome, springy motion.
+ * - `claude` — claude.ai / Claude Desktop: warm paper surfaces, clay accent, flat
+ *              chrome and hairline rules. Fixed palette, so artwork never
+ *              repaints the accents and the colour field is not painted at all.
+ */
+export type Skin = "aria" | "claude";
+
+export const SKINS: { id: Skin; label: string; hint: string }[] = [
+  {
+    id: "aria",
+    label: "Aria",
+    hint: "Album colour fills the window behind frosted chrome.",
+  },
+  {
+    id: "claude",
+    label: "Claude",
+    hint: "Warm paper and clay, flat surfaces, serif headings.",
+  },
+];
+
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 class Theme {
+  skin = $state<Skin>("aria");
   backdrop = $state<Backdrop>("opaque");
   /** Opacity of the artwork colour wash drawn over the backdrop (0–1). */
   wash = $state(1);
@@ -47,8 +77,19 @@ class Theme {
     return this.effective !== "opaque";
   }
 
+  /**
+   * Whether the skin paints Aria's artwork colour field. The Claude skin is a
+   * fixed palette on flat paper, so the blob wash and the artwork wash slider
+   * have nothing to act on.
+   */
+  get artworkField() {
+    return this.skin === "aria";
+  }
+
   load() {
     try {
+      const s = localStorage.getItem("aria.skin") as Skin | null;
+      if (s && SKINS.some((o) => o.id === s)) this.skin = s;
       const b = localStorage.getItem("aria.backdrop") as Backdrop | null;
       if (b && BACKDROPS.some((o) => o.id === b)) this.backdrop = b;
       const w = localStorage.getItem("aria.wash");
@@ -58,6 +99,13 @@ class Theme {
       /* first run / storage blocked — defaults are fine */
     }
     this.apply();
+  }
+
+  setSkin(skin: Skin) {
+    if (this.skin === skin) return;
+    this.skin = skin;
+    this.persist();
+    this.applyCss();
   }
 
   async setBackdrop(backdrop: Backdrop) {
@@ -84,6 +132,7 @@ class Theme {
 
   private persist() {
     try {
+      localStorage.setItem("aria.skin", this.skin);
       localStorage.setItem("aria.backdrop", this.backdrop);
       localStorage.setItem("aria.wash", String(this.wash));
     } catch {
@@ -93,9 +142,16 @@ class Theme {
 
   private applyCss() {
     const root = document.documentElement;
+    root.dataset.skin = this.skin;
     root.dataset.backdrop = this.effective;
     root.dataset.translucent = String(this.translucent);
-    root.style.setProperty("--wash-opacity", String(this.wash));
+    // Inline wins over the stylesheet, so a skin with no colour field must not
+    // leave a stale wash behind for its own surfaces to read.
+    if (this.artworkField) {
+      root.style.setProperty("--wash-opacity", String(this.wash));
+    } else {
+      root.style.removeProperty("--wash-opacity");
+    }
   }
 
   /** Drop the backdrop without forgetting the user's choice (immersive mode). */

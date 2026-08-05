@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { library } from "./library.svelte";
 import { lastfm } from "./lastfm.svelte";
+import { discord } from "./discord.svelte";
 
 export interface TrackMeta {
   path: string;
@@ -46,6 +47,9 @@ const BAND_SHAPE = [1.0, 0.9, 0.74, 0.58];
 const BAND_FLOOR = 0.34;
 /** >1 expands the range, so only genuinely loud content reaches full height. */
 const BAND_CURVE = 1.45;
+/** Tracks autoplay appends each time the queue runs dry. Small enough that the
+ *  queue stays readable, large enough to survive a few skips. */
+const AUTOPLAY_BATCH = 10;
 
 function extOf(path: string): string {
   return path.split(".").pop()?.toLowerCase() ?? "";
@@ -80,6 +84,8 @@ class Player {
   /** off → repeat the whole context (queue/album/playlist) → repeat one. */
   repeat = $state<"off" | "all" | "one">("off");
   shuffled = $state(false);
+  /** Keep playing past the end of the queue by pulling similar library tracks. */
+  autoplay = $state(false);
 
   private initialized = false;
 
@@ -192,7 +198,7 @@ class Player {
 
     // Keep the OS overlay's timeline/state roughly in sync.
     setInterval(() => {
-      if (this.loaded) this.syncSmtcPlayback();
+      if (this.loaded) this.publishPlayback();
     }, 1000);
     setInterval(() => this.sampleListen(), 1000);
 
@@ -454,21 +460,65 @@ class Player {
 
     this.beginListen(track);
     this.syncSmtcMeta();
-    this.syncSmtcPlayback();
+    this.publishPlayback();
+  }
+
+  /**
+   * Tracks to append when autoplay keeps a finished queue going. Prefers the
+   * current artist, then the current album, then anything else in the library,
+   * and never re-queues something already present.
+   */
+  private autoplayPicks(): TrackMeta[] {
+    const queued = new Set(this.queue.map((t) => t.path));
+    const pool = library.tracks.filter((t) => t.kind === "audio" && !queued.has(t.path));
+    if (!pool.length) return [];
+
+    const cur = this.current;
+    const rank = (t: TrackMeta) => {
+      if (!cur) return 2;
+      if (t.artist && t.artist === cur.artist) return 0;
+      if (t.album && t.album === cur.album) return 1;
+      return 2;
+    };
+
+    // Shuffle first, then sort by rank. Array#sort is stable, so tracks of equal
+    // affinity keep their shuffled order and each run picks a different set.
+    const picks = pool.slice();
+    for (let i = picks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [picks[i], picks[j]] = [picks[j], picks[i]];
+    }
+    picks.sort((a, b) => rank(a) - rank(b));
+    return picks.slice(0, AUTOPLAY_BATCH);
   }
 
   async next() {
     if (this.currentIndex + 1 < this.queue.length) {
       await this.playIndex(this.currentIndex + 1);
-    } else if (this.repeat === "all" && this.queue.length > 0) {
+      return;
+    }
+    if (this.repeat === "all" && this.queue.length > 0) {
       // Loop the context back to the top.
       await this.playIndex(0);
-    } else {
-      // End of queue — silence both backends.
-      await invoke("stop");
-      await this.stopWeb();
-      this.playing = false;
+      return;
     }
+    if (this.autoplay) {
+      // Extend rather than replace, so the queue stays a readable history.
+      const more = this.autoplayPicks();
+      if (more.length) {
+        this.queue = [...this.queue, ...more];
+        await this.playIndex(this.currentIndex + 1);
+        return;
+      }
+    }
+    // End of queue — silence both backends.
+    await invoke("stop");
+    await this.stopWeb();
+    this.playing = false;
+  }
+
+  toggleAutoplay() {
+    this.autoplay = !this.autoplay;
   }
 
   /** Automatic advance when a track finishes (honours repeat one/all). */
@@ -526,7 +576,7 @@ class Player {
     if (this.usingWeb && this.audio) {
       if (this.audio.paused) await this.audio.play();
       else this.audio.pause();
-      setTimeout(() => this.syncSmtcPlayback(), 50);
+      setTimeout(() => this.publishPlayback(), 50);
       return;
     }
     if (this.playing) {
@@ -534,10 +584,10 @@ class Player {
     } else {
       await invoke("play");
     }
-    setTimeout(() => this.syncSmtcPlayback(), 50);
+    setTimeout(() => this.publishPlayback(), 50);
   }
 
-  // --- System media controls (SMTC) ----------------------------------------
+  // --- Outward now-playing state (SMTC, Discord) ---------------------------
 
   private syncSmtcMeta() {
     const t = this.current;
@@ -550,8 +600,12 @@ class Player {
     });
   }
 
-  private syncSmtcPlayback() {
+  /** Push the current playback state to everything outside the app: the OS
+   *  media overlay and Discord. Called on load, play/pause, seek, and once per
+   *  status tick; both consumers de-duplicate, so the tick is not a concern. */
+  private publishPlayback() {
     invoke("smtc_playback", { playing: this.playing, position: this.position });
+    discord.sync(this.current, this.playing, this.position);
   }
 
   /** Pause whichever backend is active (used when video playback takes over). */
@@ -573,7 +627,7 @@ class Player {
     } else {
       await invoke("seek", { position: seconds });
     }
-    this.syncSmtcPlayback();
+    this.publishPlayback();
   }
 
   async setVolume(v: number) {

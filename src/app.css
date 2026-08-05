@@ -1,10 +1,96 @@
 /* Aria — Apple Music / Cider inspired theme.
    Artwork-forward, frosted surfaces, red-pink accent. Follows system light/dark. */
 
+/* Figtree — bundled locally, never fetched. Declaring the full 45–920 weight
+   axis is what makes the variable font honour `font-weight`; without the range
+   the browser picks the default instance (Light) and synthesises bold, which is
+   exactly the smeared look this replaced. See static/fonts/NOTICE.md. */
+@font-face {
+  font-family: "Figtree";
+  src: url("/fonts/Figtree-Variable.ttf") format("truetype-variations");
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: block;
+}
+
+/* San Francisco, subset to Latin + Latin-Ext. Apple ships two optical sizes and
+   they are not interchangeable: Text has looser spacing and taller lowercase for
+   UI sizes, Display tightens up for headings. Anything outside the subset (CJK,
+   emoji in a track name) simply falls through to the next family in the stack,
+   which is what happened for every glyph before these were bundled. */
+@font-face {
+  font-family: "SF Pro Text";
+  src: url("/fonts/SFProText-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SF Pro Text";
+  src: url("/fonts/SFProText-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SF Pro Text";
+  src: url("/fonts/SFProText-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SF Pro Text";
+  src: url("/fonts/SFProText-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/SFProDisplay-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/SFProDisplay-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/SFProDisplay-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/SFProDisplay-800.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
+  /* Body copy leads with the Text cut — it is drawn for exactly these sizes.
+     Leading with Display here would set the whole UI in a face optimised for
+     34px headings, which reads cramped at 13px. */
   --font:
+    "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  /* Display face for view titles and detail headings — the tighter optical cut.
+     Skins that want a separate voice for headings override it. */
+  --font-display:
     "SF Pro Display", "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont,
     "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  /* Lyrics get their own face. Big, geometric and even-weighted reads better at
+     display sizes than the UI stack, whose heavy weights are synthesised on
+     Windows. Same choice Cider makes. */
+  --font-lyrics: "Figtree", var(--font);
 
   /* Light */
   --bg: #ffffff;
@@ -20,6 +106,7 @@
   --accent: rgb(182, 141, 93);
   --accent-2: rgb(216, 177, 128);
   --accent-text: #ffffff;
+  --danger: #ff5a5a;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   --radius: 12px;
@@ -30,15 +117,40 @@
   --art-tertiary: rgb(71, 62, 113);
   --art-deep: rgb(24, 18, 24);
   --dynamic-bg-blur: 7px;
-  --dynamic-bg-brightness: 45%;
+  /* The blurred cover itself, not the derived blobs. Brighter than the blobs
+     need to be, because it is what carries the cover's actual colour rather
+     than a three-swatch approximation of it. */
+  --dynamic-bg-brightness: 58%;
   --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --motion-spring-strong: cubic-bezier(0.34, 1.7, 0.64, 1);
 
   /* Shared chrome translucency — every frosted surface (titlebar, sidebar,
      side panels) reads from the same tint/blur so they look like one
-     material instead of a patchwork of different opacities. */
-  --chrome-tint: color-mix(in srgb, var(--sidebar) 80%, var(--art-primary) 8%);
+     material instead of a patchwork of different opacities.
+
+     The artwork share scales with `--wash-opacity` (the Artwork wash setting),
+     so one slider takes the whole window from neutral chrome to a fully
+     colour-washed one, and a blinding cover can always be dialled back. */
+  --chrome-tint: color-mix(
+    in srgb,
+    var(--sidebar) calc(100% - 30% * var(--wash-opacity)),
+    var(--art-primary) calc(30% * var(--wash-opacity))
+  );
   --chrome-blur: blur(32px) saturate(1.4);
+  /* The main content pane's own frosting, kept separate from the chrome so a
+     flat skin can switch it off without also flattening the titlebar. */
+  --content-blur: blur(22px) saturate(1.08);
+
+  /* Context menu. Aria's menus are always dark, like a native macOS menu,
+     regardless of the surrounding light/dark scheme. */
+  --menu-bg: rgba(22, 22, 22, 0.94);
+  --menu-blur: blur(28px) saturate(1.4);
+  --menu-border: rgba(255, 255, 255, 0.08);
+  --menu-shadow: 0 10px 40px rgba(0, 0, 0, 0.65);
+  --menu-text: #f5f5f7;
+  --menu-sep: rgba(255, 255, 255, 0.08);
+  --menu-danger: #ff453a;
+  --menu-accent-text: #ffffff;
 
   /* Backdrop composition (see theme.svelte.ts). By default Aria paints its own
      opaque artwork field; when a Mica/Acrylic backdrop is active — ours or
@@ -46,13 +158,22 @@
      the OS material actually reads through the window. */
   --app-base: var(--art-deep);
   --wash-opacity: 1;
-  --content-alpha: 72%;
+  /* Opacity of the content pane over the artwork field. Thinner than the
+     chrome on purpose: the main pane is the largest surface, so it decides
+     whether the window reads as coloured or as grey with a tinted border.
+     Scales with the wash so text contrast stays recoverable. */
+  --content-alpha: calc(74% - 34% * var(--wash-opacity));
 }
 
 html[data-translucent="true"] {
   --app-base: transparent;
-  --content-alpha: 30%;
-  --chrome-tint: color-mix(in srgb, var(--sidebar) 46%, var(--art-primary) 7%);
+  /* Already sitting on an OS material, so it starts far thinner. */
+  --content-alpha: calc(38% - 14% * var(--wash-opacity));
+  --chrome-tint: color-mix(
+    in srgb,
+    var(--sidebar) calc(100% - 22% * var(--wash-opacity)),
+    var(--art-primary) calc(22% * var(--wash-opacity))
+  );
 }
 
 @media (prefers-color-scheme: dark) {
@@ -73,6 +194,128 @@ html[data-translucent="true"] {
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
     --shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
     --art-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* ── Claude skin ───────────────────────────────────────────────────────────────
+   claude.ai / Claude Desktop: warm paper rather than white, clay rather than
+   gold, hairline rules rather than shadow, and nothing moving in the
+   background. The palette is fixed, so artwork never repaints it (see
+   applyPalette in +page.svelte) and no colour field is painted at all.
+
+   These blocks must stay last: they outrank the `:root` defaults above on
+   specificity, and the dark block must follow the light one so a dark system
+   scheme still lands on the dark values. */
+
+html[data-skin="claude"] {
+  --font:
+    "Styrene A", "Styrene B", -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  /* Claude sets headings in Copernicus. Georgia is the dependable stand-in on
+     Windows; no webfont is loaded, so the app stays offline-clean. */
+  --font-display:
+    "Copernicus", "Tiempos Text", Charter, "Bitstream Charter", "Iowan Old Style",
+    Georgia, "Times New Roman", serif;
+
+  --bg: #faf9f5;
+  --bg-deep: #f0eee6;
+  --sidebar: #f0eee6;
+  --surface: rgba(84, 62, 40, 0.055);
+  --hover: rgba(84, 62, 40, 0.075);
+  --active: rgba(84, 62, 40, 0.11);
+  --text: #141413;
+  --text-dim: #5c5b55;
+  --text-faint: #71706a;
+  --border: rgba(61, 48, 33, 0.11);
+  --accent: #ae5330;
+  --accent-2: #c2603c;
+  --accent-text: #ffffff;
+  --danger: #b3402c;
+
+  --shadow-sm: 0 1px 2px rgba(45, 35, 25, 0.07);
+  --shadow: 0 8px 24px rgba(45, 35, 25, 0.11);
+  --art-shadow: 0 4px 14px rgba(45, 35, 25, 0.17);
+  --radius: 10px;
+  --radius-sm: 8px;
+
+  /* Calm, no overshoot — Claude's surfaces settle, they don't bounce. */
+  --motion-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-spring-strong: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Flat chrome: one paper tone, no frosting, and an opaque content pane. */
+  --chrome-tint: var(--sidebar);
+  --chrome-blur: none;
+  --content-blur: none;
+  --content-alpha: 100%;
+  --app-base: var(--bg);
+
+  /* Menus join the paper instead of floating as dark glass over it. */
+  --menu-bg: #ffffff;
+  --menu-blur: none;
+  --menu-border: rgba(61, 48, 33, 0.14);
+  --menu-shadow: 0 10px 30px rgba(45, 35, 25, 0.15);
+  --menu-text: #141413;
+  --menu-sep: rgba(61, 48, 33, 0.11);
+  --menu-danger: #b3402c;
+  --menu-accent-text: #ffffff;
+
+  /* Decorative only under this skin — swatches and gradients still get to show
+     the signature Claude orange even though no colour field is painted. */
+  --art-primary: #d97757;
+  --art-secondary: #c2603c;
+  --art-tertiary: #b8946a;
+  --art-deep: #f0eee6;
+}
+
+/* With a Mica/Acrylic backdrop the paper thins so the OS material reads
+   through it, and just enough frosting comes back to keep text legible. */
+html[data-skin="claude"][data-translucent="true"] {
+  --app-base: transparent;
+  --content-alpha: 78%;
+  --content-blur: blur(26px) saturate(1.05);
+  --chrome-tint: color-mix(in srgb, var(--sidebar) 72%, transparent);
+  --chrome-blur: blur(30px) saturate(1.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-skin="claude"] {
+    --bg: #262624;
+    --bg-deep: #1a1917;
+    --sidebar: #1f1e1d;
+    --surface: rgba(255, 255, 255, 0.045);
+    --hover: rgba(255, 255, 255, 0.075);
+    --active: rgba(255, 255, 255, 0.11);
+    --text: #f5f4ee;
+    --text-dim: #c2c0b6;
+    --text-faint: #918f86;
+    --border: rgba(255, 255, 255, 0.1);
+    --accent: #d97757;
+    --accent-2: #e89b7e;
+    --accent-text: #23211f;
+    --danger: #f08a72;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --art-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+
+    --menu-bg: #30302e;
+    --menu-border: rgba(255, 255, 255, 0.11);
+    --menu-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+    --menu-text: #f5f4ee;
+    --menu-sep: rgba(255, 255, 255, 0.1);
+    --menu-danger: #f08a72;
+    --menu-accent-text: #23211f;
+
+    --art-primary: #d97757;
+    --art-secondary: #c2603c;
+    --art-tertiary: #a68256;
+    --art-deep: #1a1917;
+  }
+
+  html[data-skin="claude"][data-translucent="true"] {
+    --app-base: transparent;
+    --content-alpha: 74%;
+    --chrome-tint: color-mix(in srgb, var(--sidebar) 68%, transparent);
   }
 }
 
@@ -142,11 +385,31 @@ h3 {
   overflow-y: auto;
 }
 
+/* Display type. `--font-display` is the body face under Aria, so these are
+   no-ops there and become the heading voice under a skin that sets it.
+   `.name-input` is the inline rename field that stands in for a heading — it
+   has to match, or renaming an album visibly changes typeface. */
+.view-title,
+h1,
+.name-input {
+  font-family: var(--font-display);
+}
+
 .view-title {
   font-size: 30px;
   font-weight: 800;
   letter-spacing: -0.5px;
   margin-bottom: 22px;
+}
+
+/* Serif at 800 has no matching cut and renders as a smeared synthetic bold, so
+   the Claude skin steps the display weight down and relaxes the tracking that
+   was compensating for a tight sans. */
+html[data-skin="claude"] .view-title,
+html[data-skin="claude"] h1,
+html[data-skin="claude"] .name-input {
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .pill-btn {
@@ -176,6 +439,18 @@ h3 {
 }
 .pill-btn.filled:hover {
   background: var(--accent-2);
+}
+
+/* Claude's controls are rounded rectangles that tint on hover — they don't lift
+   off the page. Keeping the pill radius here would read as a different app. */
+html[data-skin="claude"] .pill-btn {
+  border-radius: 9px;
+}
+html[data-skin="claude"] .pill-btn:hover {
+  transform: none;
+}
+html[data-skin="claude"] .pill-btn:active {
+  transform: scale(0.985);
 }
 
 .grid {

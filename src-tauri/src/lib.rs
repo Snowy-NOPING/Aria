@@ -1,4 +1,5 @@
 mod audio;
+mod discord;
 mod lastfm;
 mod lyrics;
 mod media;
@@ -89,7 +90,10 @@ fn read_sidecar_lyrics(path: String) -> Option<SidecarLyrics> {
     let parent = media_path.parent()?;
     let stem = media_path.file_stem()?.to_str()?;
 
-    for extension in ["lrc", "vtt", "srt", "txt"] {
+    // Richest format first: Lyricsfile can carry word-level timing, LRC/VTT/SRT
+    // only line-level. `with_extension` swaps the media extension for the whole
+    // string, so this looks for "<name>.lyricsfile.yaml".
+    for extension in ["lyricsfile.yaml", "lrc", "vtt", "srt", "txt"] {
         let candidates = [
             media_path.with_extension(extension),
             parent.join(format!("{stem} (lyrics).{extension}")),
@@ -104,6 +108,129 @@ fn read_sidecar_lyrics(path: String) -> Option<SidecarLyrics> {
         }
     }
     None
+}
+
+/// Lyric sidecars that travel with an audio file when it moves. Mirrors
+/// `read_sidecar_lyrics`, so a track keeps the lyrics it had after a move.
+const SIDECAR_EXTS: [&str; 5] = ["lyricsfile.yaml", "lrc", "vtt", "srt", "txt"];
+
+/// Make an album name usable as a single path component on Windows.
+/// Returns None when nothing usable survives.
+fn sanitize_component(name: &str) -> Option<String> {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if "<>:\"/\\|?*".contains(c) || (c as u32) < 0x20 { '_' } else { c })
+        .collect();
+    // Windows also rejects trailing dots and spaces on a component.
+    let trimmed = cleaned.trim().trim_end_matches('.').trim().to_string();
+    if trimmed.is_empty() {
+        return None;
+    }
+    // Reserved device names are rejected with or without an extension.
+    const RESERVED: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+        "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    let head = trimmed.split('.').next().unwrap_or("").to_uppercase();
+    if RESERVED.contains(&head.as_str()) {
+        return Some(format!("_{trimmed}"));
+    }
+    Some(trimmed)
+}
+
+/// Create (or reuse) the folder backing an album. Returns its full path.
+#[tauri::command]
+fn ensure_album_dir(root: String, name: String) -> Result<String, String> {
+    let safe = sanitize_component(&name).ok_or("album name has no usable characters")?;
+    let dir = std::path::Path::new(&root).join(safe);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+/// Rename an album's folder, keeping its contents. Returns the new path.
+#[tauri::command]
+fn rename_album_dir(dir: String, name: String) -> Result<String, String> {
+    let from = std::path::Path::new(&dir);
+    if !from.is_dir() {
+        return Err("album folder does not exist".into());
+    }
+    let safe = sanitize_component(&name).ok_or("album name has no usable characters")?;
+    let parent = from.parent().ok_or("album folder has no parent")?;
+    let to = parent.join(&safe);
+    if to == from {
+        return Ok(dir);
+    }
+    if to.exists() {
+        return Err(format!("a folder named \"{safe}\" already exists"));
+    }
+    std::fs::rename(from, &to).map_err(|e| e.to_string())?;
+    Ok(to.to_string_lossy().into_owned())
+}
+
+/// Move a file, falling back to copy+delete across volumes — `fs::rename`
+/// cannot cross them, which is easy to hit with a library on a second drive.
+fn move_file(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+    match std::fs::rename(from, to) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            std::fs::copy(from, to)?;
+            std::fs::remove_file(from)
+        }
+    }
+}
+
+/// Move an audio file into `dest_dir`, bringing its lyric sidecars along.
+/// Returns the audio file's new path.
+///
+/// Nothing is ever overwritten: a colliding name gains a " (2)" suffix and the
+/// sidecars follow whatever stem the audio ended up with.
+#[tauri::command]
+fn move_track(path: String, dest_dir: String) -> Result<String, String> {
+    let src = std::path::Path::new(&path);
+    if !src.is_file() {
+        return Err(format!("not a file: {path}"));
+    }
+    let dest = std::path::Path::new(&dest_dir);
+    std::fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+
+    // Already where it belongs.
+    if src.parent() == Some(dest) {
+        return Ok(path);
+    }
+
+    let stem = src.file_stem().and_then(|s| s.to_str()).ok_or("bad file name")?;
+    let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("");
+
+    // Find a stem that clashes with nothing already there. Sidecars are checked
+    // too, so a moved track can never land on another track's lyrics.
+    let mut final_stem = stem.to_string();
+    for n in 2..1000 {
+        let clash = dest.join(format!("{final_stem}.{ext}")).exists()
+            || SIDECAR_EXTS
+                .iter()
+                .any(|e| dest.join(format!("{final_stem}.{e}")).exists());
+        if !clash {
+            break;
+        }
+        final_stem = format!("{stem} ({n})");
+    }
+
+    let target = dest.join(format!("{final_stem}.{ext}"));
+    move_file(src, &target).map_err(|e| format!("move failed: {e}"))?;
+
+    // Sidecars are best-effort: the audio has already moved, so failing to
+    // bring a lyrics file must not report the move itself as failed.
+    for e in SIDECAR_EXTS {
+        let mut candidates = vec![src.with_extension(e)];
+        if let Some(p) = src.parent() {
+            candidates.push(p.join(format!("{stem} (lyrics).{e}")));
+        }
+        // Only the first match moves; both would collide on the same target.
+        if let Some(found) = candidates.into_iter().find(|c| c.is_file()) {
+            let _ = move_file(&found, &dest.join(format!("{final_stem}.{e}")));
+        }
+    }
+    Ok(target.to_string_lossy().into_owned())
 }
 
 /// Read an image file and return it as a `data:` URI, for custom album / song /
@@ -145,7 +272,12 @@ fn set_backdrop(window: tauri::WebviewWindow, kind: String) -> Result<(), String
         "mica-alt" | "tabbed" => Some(Effect::Tabbed),
         "acrylic" => Some(Effect::Acrylic),
         "blur" => Some(Effect::Blur),
-        "none" | "external" => None,
+        // All three apply no OS effect, for different reasons: "opaque" is the
+        // default, where Aria paints its own surface; "external" hands the
+        // backdrop to a third-party compositor. Clearing the effect matters as
+        // much as never setting one — switching back from Mica has to actually
+        // remove it, or the window keeps compositing the old material.
+        "none" | "opaque" | "external" => None,
         other => return Err(format!("unknown backdrop: {other}")),
     };
 
@@ -264,7 +396,9 @@ pub fn run() {
             app.manage(engine);
             app.manage(media::Smtc::new());
             app.manage(lastfm::LastFm::new(app.handle()));
+            app.manage(discord::Discord::new());
             media::init(app.handle());
+            discord::init(app.handle());
 
             // The window stays `transparent` (see tauri.conf.json). We don't
             // force a backdrop at startup — the frontend restores the user's
@@ -287,6 +421,9 @@ pub fn run() {
             smtc_playback,
             load_data,
             save_data,
+            ensure_album_dir,
+            rename_album_dir,
+            move_track,
             load_track,
             play,
             pause,
@@ -302,6 +439,10 @@ pub fn run() {
             lastfm::lastfm_now_playing,
             lastfm::lastfm_queue_scrobble,
             lastfm::lastfm_flush_queue,
+            discord::discord_get_state,
+            discord::discord_save_settings,
+            discord::discord_set_activity,
+            discord::discord_clear_activity,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

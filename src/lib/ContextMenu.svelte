@@ -115,7 +115,9 @@
 
 {#snippet icon(name: string)}
   {#if name === "pin"}
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 3 6 6M8 8l8-2 2 2-2 8-3-3-5 5-2-2 5-5-3-3Z"/></svg>
+    <!-- Same thumbtack as SidebarIcon's "pin"; kept in sync by hand since this
+         menu draws its icons inline. -->
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3.5h6"/><path d="M10.5 3.5v5.8L7.5 13h9l-3-3.7V3.5"/><path d="M12 13v7.5"/></svg>
   {:else if name === "playlist-add" || name === "playlist"}
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h11M4 12h8M4 18h8M17 11v7a2.5 2.5 0 1 1-2-2.4M17 11l3-1"/></svg>
   {:else if name === "play-next"}
@@ -155,16 +157,16 @@
   .context-menu {
     position: fixed;
     z-index: 10000;
-    background: rgba(22, 22, 22, 0.94);
-    backdrop-filter: blur(28px) saturate(1.4);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--menu-bg);
+    backdrop-filter: var(--menu-blur);
+    border: 1px solid var(--menu-border);
     border-radius: 9px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.65);
+    box-shadow: var(--menu-shadow);
     padding: 5px;
     min-width: 230px;
     display: flex;
     flex-direction: column;
-    color: #f5f5f7;
+    color: var(--menu-text);
     animation: menu-pop 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
@@ -192,7 +194,7 @@
     background: transparent;
     padding: 7px 10px;
     border-radius: 5px;
-    color: #f5f5f7;
+    color: var(--menu-text);
     font-size: 13px;
     font-weight: 500;
     text-align: left;
@@ -203,7 +205,7 @@
 
   .menu-item:hover {
     background: var(--accent, #b68d5d);
-    color: #ffffff;
+    color: var(--menu-accent-text);
   }
 
   .menu-item.disabled {
@@ -213,11 +215,11 @@
 
   .menu-item.disabled:hover {
     background: transparent;
-    color: #f5f5f7;
+    color: var(--menu-text);
   }
 
   .menu-item.danger:hover {
-    background: #ff453a;
+    background: var(--menu-danger);
   }
 
   .icon {
@@ -243,7 +245,7 @@
 
   .separator {
     height: 1px;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--menu-sep);
     margin: 4px 5px;
   }
 
@@ -251,16 +253,16 @@
     position: absolute;
     left: 98%;
     top: -5px;
-    background: rgba(22, 22, 22, 0.94);
-    backdrop-filter: blur(28px) saturate(1.4);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--menu-bg);
+    backdrop-filter: var(--menu-blur);
+    border: 1px solid var(--menu-border);
     border-radius: 9px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.65);
+    box-shadow: var(--menu-shadow);
     padding: 5px;
     min-width: 200px;
     display: flex;
     flex-direction: column;
-    color: #f5f5f7;
+    color: var(--menu-text);
     z-index: 10001;
     animation: menu-pop 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }

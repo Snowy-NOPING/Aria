@@ -8,6 +8,7 @@
   import { edit } from "$lib/edit.svelte";
   import { library } from "$lib/library.svelte";
   import { contextMenu } from "$lib/contextMenuState.svelte";
+  import { primaryArtist } from "$lib/artists";
 
   function handleContextMenu(e: MouseEvent) {
     const track = player.current;
@@ -85,10 +86,9 @@
       {
         label: "Go to Artist",
         icon: "artist",
-        action: () => {
-          nav.query = track.artist;
-          nav.go("songs");
-        }
+        // The lead credit: a track billed to two people has to pick one, and
+        // the artist page gathers everything they're credited on anyway.
+        action: () => nav.go("artist", primaryArtist(track.artist, library.atomicArtists))
       },
       {
         label: "Go to Album",

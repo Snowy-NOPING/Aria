@@ -1,10 +1,32 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { TrackMeta } from "./player.svelte";
+import { isLyricsFileName, parseLyricsFile } from "./lyricsfile";
+export { asideFlags, splitAsides } from "./lyricsAside";
+
+/** One word or segment of a word-synced line. Times are seconds. */
+export interface LyricWord {
+  t: number;
+  end: number;
+  /** Includes the whitespace needed to rebuild the line. */
+  text: string;
+}
 
 export interface LyricLine {
   t: number;
+  /** End time in seconds, when the source format provides one. */
+  end?: number;
   text: string;
+  /** Word-level timing, when the source format provides it. */
+  words?: LyricWord[];
+}
+
+/** How much of `word` has been sung at `position`, as a 0..1 fraction. */
+export function wordProgress(word: LyricWord, position: number): number {
+  if (position <= word.t) return 0;
+  if (position >= word.end) return 1;
+  const span = word.end - word.t;
+  return span > 0 ? (position - word.t) / span : 1;
 }
 
 type Status = "idle" | "loading" | "synced" | "plain" | "instrumental" | "none" | "error";
@@ -90,6 +112,10 @@ interface OverrideEntry {
   lines: LyricLine[];
   plainText: string;
   synced: boolean;
+  /** Set by formats that can declare a track has no vocals. */
+  instrumental?: boolean;
+  /** Set when the file was found but could not be parsed. */
+  error?: string;
 }
 
 interface SidecarLyrics {
@@ -97,8 +123,28 @@ interface SidecarLyrics {
   extension: string;
 }
 
-function localEntry(text: string, extension: string): OverrideEntry {
+/**
+ * Build an override entry from a local lyrics file. `extension` is the
+ * lowercase suffix; the Lyricsfile format uses the whole `lyricsfile.yaml`
+ * double extension.
+ */
+function localEntry(text: string, extension: string, duration = 0): OverrideEntry {
   const ext = extension.toLowerCase();
+
+  if (ext === "lyricsfile.yaml" || ext === "yaml" || ext === "yml") {
+    try {
+      const file = parseLyricsFile(text, duration);
+      return {
+        lines: file.lines,
+        plainText: file.lines.length ? "" : file.plain,
+        synced: file.lines.length > 0,
+        instrumental: file.instrumental,
+      };
+    } catch (e) {
+      return { lines: [], plainText: "", synced: false, error: String(e) };
+    }
+  }
+
   let lines: LyricLine[] = [];
   if (ext === "lrc") lines = parseLrc(text);
   else if (ext === "vtt" || ext === "srt") lines = parseCues(text);
@@ -128,7 +174,16 @@ class Lyrics {
   }
 
   private applyOverride(o: OverrideEntry) {
-    if (o.synced) {
+    if (o.error) {
+      this.lines = [];
+      this.plainText = "";
+      this.status = "error";
+      console.error("lyrics file could not be parsed:", o.error);
+    } else if (o.instrumental) {
+      this.lines = [];
+      this.plainText = "";
+      this.status = "instrumental";
+    } else if (o.synced) {
       this.lines = o.lines;
       this.plainText = "";
       this.status = "synced";
@@ -194,7 +249,7 @@ class Lyrics {
       });
       if (this.currentSig !== sig) return;
       if (sidecar) {
-        this.applyOverride(localEntry(sidecar.text, sidecar.extension));
+        this.applyOverride(localEntry(sidecar.text, sidecar.extension, track.duration));
         return;
       }
     } catch (e) {
@@ -240,17 +295,19 @@ class Lyrics {
     }
   }
 
-  /** Import a .lrc/.vtt/.srt/.txt file as this track's lyrics, overriding LRCLIB. */
+  /** Import a lyrics file as this track's lyrics, overriding LRCLIB. */
   async importFile(track: TrackMeta | null) {
     if (!track) return;
     const f = await open({
       multiple: false,
-      filters: [{ name: "Lyrics", extensions: ["lrc", "vtt", "srt", "txt"] }],
+      // The dialog matches on the final extension only, so Lyricsfile documents
+      // come in under "yaml" and are recognised by full name below.
+      filters: [{ name: "Lyrics", extensions: ["lyricsfile.yaml", "lrc", "vtt", "srt", "txt", "yaml", "yml"] }],
     });
     if (!f || Array.isArray(f)) return;
     const text = await invoke<string>("read_text_file", { path: f });
-    const ext = f.split(".").pop()?.toLowerCase() ?? "";
-    const entry = localEntry(text, ext);
+    const ext = isLyricsFileName(f) ? "lyricsfile.yaml" : (f.split(".").pop()?.toLowerCase() ?? "");
+    const entry = localEntry(text, ext, track.duration);
 
     await this.ensureCache();
     this.overrides[track.path] = entry;
@@ -260,6 +317,20 @@ class Lyrics {
       this.overridden = true;
       this.applyOverride(entry);
     }
+  }
+
+  /**
+   * Follow a track that moved on disk. Imported lyrics are keyed by path, so
+   * without this a track loses its lyrics the moment it is filed into an album.
+   */
+  async repath(from: string, to: string) {
+    if (from === to) return;
+    await this.ensureCache();
+    const entry = this.overrides[from];
+    if (!entry) return;
+    delete this.overrides[from];
+    this.overrides[to] = entry;
+    await invoke("save_data", { key: "lyricsOverrides", value: this.overrides });
   }
 
   /** Remove the imported override and fall back to LRCLIB again. */
@@ -291,6 +362,45 @@ class Lyrics {
       }
     }
     return ans;
+  }
+
+  /**
+   * When a line stops being sung. Lyricsfile carries a real `end`; LRC and the
+   * cue formats don't, so the next line's start stands in — which is why those
+   * formats never produce a gap and always have exactly one line active.
+   */
+  private lineEnd(i: number): number | null {
+    const line = this.lines[i];
+    if (!line) return null;
+    if (line.end != null) return line.end;
+    return this.lines[i + 1]?.t ?? null;
+  }
+
+  /**
+   * Every line being sung at `position`, earliest first. Lyricsfile allows
+   * lines to overlap (spec §4/§7) and a player may highlight several at once —
+   * a call-and-response or a doubled vocal genuinely sounds simultaneously.
+   *
+   * Returns empty during an instrumental gap, which only a format with real end
+   * times can express.
+   */
+  activeIndices(position: number, hold = 0): number[] {
+    const l = this.lines;
+    if (!l.length) return [];
+    // Scanned, not windowed. A bounded look-back assumes overlaps are only
+    // ever a line or two deep, which breaks the moment a line is deliberately
+    // held across a section: it falls out of the window and vanishes mid-hold.
+    // A full pass over a few hundred lines costs nothing at 30fps.
+    const out: number[] = [];
+    for (let i = 0; i < l.length; i++) {
+      if (l[i].t > position) break;
+      const end = this.lineEnd(i);
+      // `hold` keeps a finished line lit into the next one's opening words.
+      // Most authored timing butts lines end-to-start, so without it the
+      // handover is instantaneous and only ever one line reads as sung.
+      if (end == null || end + hold > position) out.push(i);
+    }
+    return out;
   }
 }
 

@@ -5,6 +5,16 @@
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Aria — Media Player</title>
+    <script>
+      // Stamp the saved theme before first paint. theme.load() runs on mount,
+      // which is late enough to flash the other theme's palette on every launch.
+      try {
+        var s = localStorage.getItem("aria.skin");
+        document.documentElement.dataset.skin = s === "claude" ? "claude" : "aria";
+      } catch (e) {
+        document.documentElement.dataset.skin = "aria";
+      }
+    </script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

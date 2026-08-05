@@ -21,7 +21,12 @@
 
 <div class="dynamic-background" style={paletteStyle}>
   {#if art}
+    <!-- Two copies of the same cover drifting against each other. One alone
+         reads as a static blurred photo; counter-rotating a second, mirrored
+         copy over it keeps the colour field slowly reorganising itself without
+         ever showing a recognisable edge. -->
     <div class="cover-wash" style="background-image:url({art})"></div>
+    <div class="cover-wash cover-wash-alt" style="background-image:url({art})"></div>
   {/if}
   <div class="colour-blob blob-one"></div>
   <div class="colour-blob blob-two"></div>
@@ -49,13 +54,53 @@
 
   .cover-wash {
     position: absolute;
-    inset: -4%;
+    /* Bled well past the frame: the drift now travels far enough that a
+       tighter margin would expose the edge at the extremes of the arc. */
+    inset: -34%;
     background-position: center;
     background-size: cover;
     filter: blur(var(--dynamic-bg-blur)) brightness(var(--dynamic-bg-brightness))
       saturate(1.25);
     opacity: 0.68;
-    transform: scale(1.04);
+    transform-origin: 52% 48%;
+    /* Slow enough to sit behind the UI, fast enough to read as travel. */
+    animation: cover-drift 34s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+  .cover-wash-alt {
+    opacity: 0.34;
+    transform-origin: 46% 54%;
+    /* Mirrored and counter-timed so the two layers never line back up. */
+    scale: -1 1;
+    animation: cover-drift-alt 47s ease-in-out infinite alternate;
+    mix-blend-mode: soft-light;
+  }
+
+  /* Travel, not breathing. A two-keyframe scale pulse reads as the image
+     inflating in place; the eye needs lateral movement to see it as motion.
+     These run a wide arc across the frame with the midpoint offset from the
+     mean, so the path curves instead of sliding back and forth on one axis. */
+  @keyframes cover-drift {
+    0% {
+      transform: scale(1.14) translate3d(-9%, -6%, 0) rotate(-3deg);
+    }
+    50% {
+      transform: scale(1.22) translate3d(7%, -2%, 0) rotate(2.5deg);
+    }
+    100% {
+      transform: scale(1.16) translate3d(4%, 8%, 0) rotate(-1deg);
+    }
+  }
+  @keyframes cover-drift-alt {
+    0% {
+      transform: scale(1.24) translate3d(8%, 5%, 0) rotate(4deg);
+    }
+    50% {
+      transform: scale(1.14) translate3d(-6%, 7%, 0) rotate(-2deg);
+    }
+    100% {
+      transform: scale(1.26) translate3d(-8%, -6%, 0) rotate(3deg);
+    }
   }
 
   .colour-blob {
@@ -97,12 +142,15 @@
     animation: orbit-one 29s linear infinite reverse;
   }
 
+  /* Kept deliberately light. The content pane above this is now thin enough to
+     show the field through it, so veiling here would just grey out the whole
+     window — the pane's own fill is what protects text contrast. */
   .readability-veil {
     position: absolute;
     inset: 0;
     background:
-      linear-gradient(180deg, rgb(7 6 10 / 0.1), rgb(7 6 10 / 0.28)),
-      radial-gradient(circle at 50% 35%, transparent 10%, rgb(7 6 10 / 0.18) 100%);
+      linear-gradient(180deg, rgb(7 6 10 / 0.04), rgb(7 6 10 / 0.17)),
+      radial-gradient(circle at 50% 35%, transparent 12%, rgb(7 6 10 / 0.1) 100%);
   }
 
   @keyframes orbit-one {
@@ -140,9 +188,15 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .colour-blob {
+    .colour-blob,
+    .cover-wash {
       animation: none;
       will-change: auto;
+    }
+    /* Without the drift the wide bleed is just wasted overdraw. */
+    .cover-wash {
+      inset: -4%;
+      transform: scale(1.04);
     }
   }
 </style>

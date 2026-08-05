@@ -7,6 +7,7 @@
   import Songs from "$lib/views/Songs.svelte";
   import Albums from "$lib/views/Albums.svelte";
   import AlbumDetail from "$lib/views/AlbumDetail.svelte";
+  import ArtistDetail from "$lib/views/ArtistDetail.svelte";
   import Videos from "$lib/views/Videos.svelte";
   import Playlists from "$lib/views/Playlists.svelte";
   import PlaylistDetail from "$lib/views/PlaylistDetail.svelte";
@@ -27,6 +28,8 @@
       <Albums />
     {:else if nav.view === "album"}
       <AlbumDetail />
+    {:else if nav.view === "artist"}
+      <ArtistDetail />
     {:else if nav.view === "videos"}
       <Videos />
     {:else if nav.view === "playlists"}

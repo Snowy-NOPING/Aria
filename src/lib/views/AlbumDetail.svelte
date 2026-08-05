@@ -4,11 +4,17 @@
   import { nav } from "$lib/nav.svelte";
   import Artwork from "$lib/Artwork.svelte";
   import TrackList from "$lib/TrackList.svelte";
+  import ArtistLink from "$lib/ArtistLink.svelte";
 
   const album = $derived(nav.param ? library.albumById(nav.param) : undefined);
   const tracks = $derived(nav.param ? library.albumTracks(nav.param) : []);
   const totalTime = $derived(tracks.reduce((s, t) => s + t.duration, 0));
   const cover = $derived(album?.art ?? tracks.find((t) => t.art)?.art ?? null);
+  /** Folder albums mirror what's on disk, so their name, artist and cover
+   *  aren't editable here — changing one would only desync it from the files.
+   *  The running order isn't part of that: it's ours to set either way. */
+  const readOnly = $derived(!!album && library.isFolderAlbum(album.id));
+  const customOrder = $derived(!!album && library.hasCustomOrder(album.id));
 
   let editingName = $state(false);
   let nameDraft = $state("");
@@ -16,7 +22,7 @@
   let artistDraft = $state("");
 
   function startRename() {
-    if (!album) return;
+    if (!album || readOnly) return;
     nameDraft = album.name;
     editingName = true;
   }
@@ -25,7 +31,7 @@
     editingName = false;
   }
   function startArtist() {
-    if (!album) return;
+    if (!album || readOnly) return;
     artistDraft = album.artist;
     editingArtist = true;
   }
@@ -34,12 +40,13 @@
     editingArtist = false;
   }
   async function pickCover() {
-    if (!album) return;
+    if (!album || readOnly) return;
     const img = await library.pickImage();
     if (img) await library.setAlbumCover(album.id, img);
   }
   async function del() {
-    if (album && confirm(`Delete album "${album.name}"? (Songs stay in your library.)`)) {
+    if (!album || readOnly) return;
+    if (confirm(`Delete album "${album.name}"? (Songs stay in your library.)`)) {
       await library.deleteAlbum(album.id);
       nav.go("albums");
     }
@@ -53,40 +60,63 @@
   {#if !album}
     <div class="note">Album not found.</div>
   {:else}
-    <button class="back" onclick={() => nav.go("albums")}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-      <span>Albums</span>
-    </button>
-    <div class="hero">
-      <button class="cover" onclick={pickCover} title="Change cover">
-        <Artwork src={cover} size="clamp(240px, 28vw, 360px)" radius="10px" />
-        <span class="cover-hint">Change Cover</span>
+    <!-- Back button lives inside the bleed so the artwork gradient reaches the
+         very top of the view; otherwise it starts below the button and leaves
+         a flat band across the top of the page. -->
+    <div class="hero-wrap">
+      <button class="back" onclick={() => nav.go("albums")}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        <span>Albums</span>
       </button>
-      <div class="info">
-        <div class="kicker">Album</div>
-        {#if editingName}
-          <input class="name-input" bind:value={nameDraft} onblur={commitName}
-            onkeydown={(e) => e.key === "Enter" && commitName()} />
+      <div class="hero">
+        {#if readOnly}
+          <div class="cover">
+            <Artwork src={cover} size="clamp(240px, 28vw, 360px)" radius="10px" />
+          </div>
         {:else}
-          <h1 ondblclick={startRename}>{album.name}</h1>
-        {/if}
-        {#if editingArtist}
-          <input class="artist-input" bind:value={artistDraft} onblur={commitArtist}
-            onkeydown={(e) => e.key === "Enter" && commitArtist()} placeholder="Album artist" />
-        {:else}
-          <button class="artist" onclick={startArtist}>
-            {album.artist || "Add artist…"}
+          <button class="cover" onclick={pickCover} title="Change cover">
+            <Artwork src={cover} size="clamp(240px, 28vw, 360px)" radius="10px" />
+            <span class="cover-hint">Change Cover</span>
           </button>
         {/if}
-        <div class="stats">{tracks.length} songs · {formatTime(totalTime)}</div>
-        <div class="cta">
-          <button class="pill-btn filled" onclick={() => play(0)} disabled={!tracks.length}>▶ Play</button>
-          <button class="pill-btn" onclick={() => library.togglePin("album", album.id)}>
-            {library.isPinned("album", album.id) ? "Unpin" : "Pin Album"}
-          </button>
-          <button class="pill-btn" onclick={pickCover}>Set Cover</button>
-          <button class="pill-btn" onclick={startRename}>Rename</button>
-          <button class="pill-btn danger" onclick={del}>Delete</button>
+        <div class="info">
+          <div class="kicker">{readOnly ? "Folder" : "Album"}</div>
+          {#if editingName}
+            <input class="name-input" bind:value={nameDraft} onblur={commitName}
+              onkeydown={(e) => e.key === "Enter" && commitName()} />
+          {:else}
+            <h1 ondblclick={startRename}>{album.name}</h1>
+          {/if}
+          {#if editingArtist}
+            <input class="artist-input" bind:value={artistDraft} onblur={commitArtist}
+              onkeydown={(e) => e.key === "Enter" && commitArtist()} placeholder="Album artist" />
+          {:else if album.artist}
+            <!-- The name is a link to the artist; editing it is a double-click,
+                 the same gesture that renames the album title above. -->
+            <div class="artist" ondblclick={startArtist} role="presentation">
+              <ArtistLink artist={album.artist} />
+            </div>
+          {:else if !readOnly}
+            <button class="artist" onclick={startArtist}>Add artist…</button>
+          {/if}
+          <div class="stats">{tracks.length} songs · {formatTime(totalTime)}</div>
+          <div class="cta">
+            <button class="pill-btn filled" onclick={() => play(0)} disabled={!tracks.length}>▶ Play</button>
+            <button class="pill-btn" onclick={() => library.togglePin("album", album.id)}>
+              {library.isPinned("album", album.id) ? "Unpin" : "Pin Album"}
+            </button>
+            {#if !readOnly}
+              <button class="pill-btn" onclick={pickCover}>Set Cover</button>
+              <button class="pill-btn" onclick={startRename}>Rename</button>
+              <button class="pill-btn danger" onclick={del}>Delete</button>
+            {:else if customOrder}
+              <!-- Only offered once there's something to undo: a folder in tag
+                   order has nothing to reset to. -->
+              <button class="pill-btn" onclick={() => library.clearFolderOrder(album.id)}>
+                Reset Order
+              </button>
+            {/if}
+          </div>
         </div>
       </div>
     </div>
@@ -101,7 +131,9 @@
       />
     {:else}
       <div class="note">
-        No songs yet. Add songs from the ⋯ menu on any track in your library.
+        {readOnly
+          ? "This folder has no playable audio."
+          : "No songs yet. Add songs from the ⋯ menu on any track in your library."}
       </div>
     {/if}
   {/if}
@@ -127,16 +159,29 @@
     background: var(--hover);
     transform: translateX(-1px);
   }
-  .hero {
-    display: flex;
-    gap: clamp(28px, 3.5vw, 54px);
+  /* Bleeds out through `.view`'s padding on all three sides so the artwork
+     gradient runs edge to edge and up to the very top of the page. The
+     negative margin must mirror `.view`'s padding exactly — see the narrow
+     breakpoint below, where that padding changes. */
+  .hero-wrap {
     margin: -28px -32px 24px;
-    padding: 54px 42px 34px;
-    align-items: center;
-    min-height: 390px;
+    padding: 28px 42px 34px;
     background:
       linear-gradient(to bottom, color-mix(in srgb, var(--art-primary) 58%, transparent), transparent),
       linear-gradient(120deg, color-mix(in srgb, var(--art-secondary) 34%, transparent), transparent 70%);
+  }
+  /* A fixed-palette theme has no artwork colour to bleed, so the same gradient
+     would just be a slab of brand orange. Claude puts a page header on a second
+     paper tone instead, and lets the cover supply the only colour. */
+  :global(html[data-skin="claude"]) .hero-wrap {
+    background: var(--bg-deep);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero {
+    display: flex;
+    gap: clamp(28px, 3.5vw, 54px);
+    align-items: center;
+    min-height: 390px;
   }
   .cover {
     position: relative;
@@ -195,7 +240,9 @@
     text-align: left;
     width: fit-content;
   }
-  .artist:hover {
+  /* Only the "Add artist…" affordance highlights as a whole; when the line
+     holds real names, each one lights up on its own. */
+  button.artist:hover {
     color: var(--accent);
   }
   .artist-input {
@@ -213,6 +260,14 @@
     font-size: 13px;
     color: var(--text-faint);
     margin-top: 2px;
+  }
+  /* `.view` drops to `20px 18px` here, so the bleed has to follow or the
+     gradient stops short of the edges. */
+  @media (max-width: 900px) {
+    .hero-wrap {
+      margin: -20px -18px 20px;
+      padding: 20px 18px 28px;
+    }
   }
   @media (max-width: 780px) {
     .hero {

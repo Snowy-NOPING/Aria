@@ -5,9 +5,10 @@
   import AlbumCard from "$lib/AlbumCard.svelte";
 
   const filtered = $derived.by(() => {
+    const all = library.allAlbums;
     const q = nav.query.trim().toLowerCase();
-    if (!q) return library.albums;
-    return library.albums.filter(
+    if (!q) return all;
+    return all.filter(
       (a) => a.name.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q),
     );
   });
@@ -30,9 +31,13 @@
     <button class="pill-btn filled" onclick={create}>+ New Album</button>
   </div>
 
-  {#if library.albums.length === 0}
+  {#if filtered.length === 0}
     <div class="empty">
-      <p>No albums yet. Create one and add songs to it.</p>
+      <p>
+        {nav.query.trim()
+          ? "No albums match your search."
+          : "No albums yet. Add a music folder, or create one and add songs to it."}
+      </p>
       <button class="pill-btn filled" onclick={create}>+ New Album</button>
     </div>
   {:else}

@@ -9,6 +9,18 @@
   import Sidebar from "$lib/Sidebar.svelte";
   import WindowControls from "$lib/WindowControls.svelte";
   import MainView from "$lib/MainView.svelte";
+  import DynamicBackground from "$lib/DynamicBackground.svelte";
+  import { theme } from "$lib/theme.svelte";
+  import type { ArtworkPalette } from "$lib/accent";
+
+  // The colour field is derived once in +page.svelte and handed down, so
+  // immersive mode shows the same backdrop as the window behind it rather than
+  // re-deriving a second, subtly different one.
+  let {
+    backdrop,
+  }: {
+    backdrop: { key: string; art: string | null; palette: ArtworkPalette };
+  } = $props();
 
   let seeking = $state(false);
   let seekValue = $state(0);
@@ -89,15 +101,21 @@
   class:has-panel={ui.panel !== "none"}
   transition:fade={{ duration: 260 }}
 >
-  {#if player.current?.art}
-    <div
-      class="ambient ambient-main"
-      style="background-image:url({player.current.art})"
-    ></div>
-    <div
-      class="ambient ambient-color"
-      style="background-image:url({player.current.art})"
-    ></div>
+  <!-- Same layer, same crossfade as the main window: a fixed-palette skin paints
+       no colour field, so the whole stack is left out rather than rendered at
+       zero opacity. -->
+  {#if theme.artworkField}
+    <div class="background-stack" aria-hidden="true">
+      {#key backdrop.key}
+        <div
+          class="background-frame"
+          in:fade={{ duration: 650 }}
+          out:fade={{ duration: 420 }}
+        >
+          <DynamicBackground art={backdrop.art} palette={backdrop.palette} />
+        </div>
+      {/key}
+    </div>
   {/if}
   <div class="scrim"></div>
 
@@ -259,6 +277,18 @@
               <ImmersiveIcon name="repeat" size={21} />
               {#if player.repeat === "one"}<span class="repeat-one">1</span>{/if}
             </button>
+            <button
+              class="control secondary"
+              class:on={player.autoplay}
+              title={player.autoplay
+                ? "Autoplay on — keeps playing similar tracks"
+                : "Autoplay off — stops at the end of the queue"}
+              aria-label="Autoplay"
+              aria-pressed={player.autoplay}
+              onclick={() => player.toggleAutoplay()}
+            >
+              <ImmersiveIcon name="infinity" size={21} />
+            </button>
           </div>
 
           <div class="volume-row" transition:fade={{ duration: 180 }}>
@@ -391,26 +421,34 @@
   .immersive.idle {
     cursor: none;
   }
-  .ambient {
+  /* Mirrors the main window's stack so both surfaces composite identically. */
+  .background-stack,
+  .background-frame {
     position: absolute;
-    background-position: center;
+    inset: 0;
+    z-index: 0;
     pointer-events: none;
   }
-  .ambient-main {
-    inset: -16%;
-    background-size: cover;
-    filter: blur(92px) saturate(2.15) brightness(1.18);
-    transform: scale(1.18);
-    opacity: 0.98;
+  .background-stack {
+    overflow: hidden;
   }
-  .ambient-color {
-    inset: -35%;
-    background-size: 58% 58%;
-    background-repeat: repeat;
-    filter: blur(150px) saturate(2.35) brightness(1.12);
-    transform: rotate(-7deg) scale(1.22);
-    opacity: 0.54;
-    mix-blend-mode: screen;
+  .background-frame {
+    animation: background-arrive 720ms var(--motion-spring-strong) both;
+  }
+  /* Svelte scopes keyframes per component, so this is redeclared here rather
+     than inherited from the copy in +page.svelte. */
+  @keyframes background-arrive {
+    from {
+      transform: scale(1.055);
+    }
+    to {
+      transform: scale(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .background-frame {
+      animation: none;
+    }
   }
   .scrim {
     position: absolute;
@@ -794,18 +832,20 @@
     padding: 2px 8px;
     font-size: clamp(27px, 2.25vw, 43px);
     line-height: 1.3;
-    letter-spacing: -0.8px;
     color: #fff;
-    opacity: 0.28;
+    /* Set the ramp's knobs, not `opacity` — writing opacity here would flatten
+       the per-line dim/blur falloff back to one value. */
+    --lyric-dim: 0.46;
+    --lyric-past: 0.22;
+    --lyric-lit: 0.97;
+    --lyric-blur-step: 0.62px;
+    /* Only safe over the artwork field, where the backdrop is always dark. */
+    --lyric-glow: 0 0 22px rgba(255, 255, 255, 0.45);
     text-align: left;
     transform-origin: left center;
   }
-  .lyrics-stage :global(.line.past) {
-    opacity: 0.2;
-  }
   .lyrics-stage :global(.line.active) {
     color: #fff;
-    opacity: 0.95;
     transform: none;
   }
   .lyrics-stage :global(.line:hover) {

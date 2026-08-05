@@ -2,7 +2,9 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { library } from "$lib/library.svelte";
   import { lastfm } from "$lib/lastfm.svelte";
-  import { theme, BACKDROPS } from "$lib/theme.svelte";
+  import { discord } from "$lib/discord.svelte";
+  import { theme, BACKDROPS, SKINS } from "$lib/theme.svelte";
+  import { lyricsStyle, LYRIC_FX } from "$lib/lyricsStyle.svelte";
 
   let apiSecret = $state("");
 
@@ -22,7 +24,40 @@
   <section>
     <h2>Appearance</h2>
     <p class="desc">
-      Aria's window is transparent, so it can either paint its own artwork field or let a
+      Both themes follow your system light and dark setting.
+    </p>
+
+    <div class="skins" role="radiogroup" aria-label="Theme">
+      {#each SKINS as option}
+        <button
+          class="skin"
+          class:on={theme.skin === option.id}
+          role="radio"
+          aria-checked={theme.skin === option.id}
+          onclick={() => theme.setSkin(option.id)}
+        >
+          <span class="preview" data-skin-preview={option.id} aria-hidden="true">
+            <span class="p-rail">
+              <span class="p-nav on"></span>
+              <span class="p-nav"></span>
+              <span class="p-nav"></span>
+            </span>
+            <span class="p-body">
+              <span class="p-title">Aa</span>
+              <span class="p-row"></span>
+              <span class="p-row short"></span>
+              <span class="p-accent"></span>
+            </span>
+          </span>
+          <strong>{option.label}</strong>
+          <small>{option.hint}</small>
+        </button>
+      {/each}
+    </div>
+
+    <h3>Window backdrop</h3>
+    <p class="desc">
+      Aria's window is transparent, so it can either paint its own surface or let a
       blurred material show through. Pick <strong>Mica For Everyone</strong> if you use that
       tool — Aria then applies no backdrop of its own and simply gets out of its way.
     </p>
@@ -43,22 +78,27 @@
       {/each}
     </div>
 
-    <label class="wash-row">
-      <span>
-        <strong>Artwork wash</strong>
-        <small>How strongly the album-colour field is painted over the backdrop.</small>
-      </span>
-      <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.01"
-        aria-label="Artwork wash strength"
-        value={theme.wash}
-        oninput={(e) => theme.setWash(+(e.target as HTMLInputElement).value)}
-      />
-      <span class="wash-value">{Math.round(theme.wash * 100)}%</span>
-    </label>
+    <!-- The wash only has meaning where there is an artwork colour field to
+         fade. The Claude theme paints none, so the control is left out rather
+         than shown doing nothing. -->
+    {#if theme.artworkField}
+      <label class="wash-row">
+        <span>
+          <strong>Artwork wash</strong>
+          <small>How strongly the album-colour field is painted over the backdrop.</small>
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          aria-label="Artwork wash strength"
+          value={theme.wash}
+          oninput={(e) => theme.setWash(+(e.target as HTMLInputElement).value)}
+        />
+        <span class="wash-value">{Math.round(theme.wash * 100)}%</span>
+      </label>
+    {/if}
 
     {#if theme.lastError}
       <div class="feedback">
@@ -111,6 +151,117 @@
       Successful LRCLIB results are cached permanently. Missing results are retried after
       seven days, and you can force a fresh lookup from the Lyrics view at any time.
     </p>
+
+    <div class="sec-head">
+      <h3>Karaoke rendering</h3>
+      {#if !lyricsStyle.isDefault}
+        <div class="tools">
+          <button class="pill-btn" onclick={() => lyricsStyle.reset()}>Reset</button>
+        </div>
+      {/if}
+    </div>
+    <p class="desc">
+      These affect word-synced lyrics, which need per-word timing from a
+      <code>.lyricsfile.yaml</code> file. Line-synced sources such as LRC still use the
+      line transition and cascade.
+    </p>
+    {#each LYRIC_FX as knob (knob.key)}
+      <label class="wash-row">
+        <span>
+          <strong>{knob.label}</strong>
+          <small>{knob.hint}</small>
+        </span>
+        <input
+          type="range"
+          min={knob.min}
+          max={knob.max}
+          step={knob.step}
+          aria-label={knob.label}
+          value={lyricsStyle[knob.key]}
+          oninput={(e) => lyricsStyle.set(knob.key, +(e.target as HTMLInputElement).value)}
+        />
+        <span class="wash-value">{Math.round(lyricsStyle[knob.key] * 100)}%</span>
+      </label>
+    {/each}
+  </section>
+
+  <section aria-busy={discord.busy}>
+    <div class="sec-head">
+      <div>
+        <h2>Discord</h2>
+        {#if discord.enabled && discord.connected}
+          <div class="connection">Connected — showing your current track</div>
+        {/if}
+      </div>
+    </div>
+    <p class="desc">
+      Shows what you're playing on your Discord profile, with album art and a progress
+      bar. Works as-is — Aria publishes under its own Discord application, the same way
+      Cider and other players do.
+    </p>
+
+    <details class="advanced">
+      <summary>Use your own Discord application</summary>
+      <p class="desc">
+        Only needed if you want the card to carry a different name or your own fallback
+        art. Whatever you <strong>name</strong> the application is what the card says
+        you're listening to. Leave blank to keep Aria's.
+      </p>
+      <div class="credential-grid one">
+        <label>
+          <span>Application ID</span>
+          <input
+            autocomplete="off"
+            spellcheck="false"
+            bind:value={discord.appId}
+            placeholder={discord.usingDefault ? "Using Aria's built-in application" : ""}
+          />
+        </label>
+      </div>
+      <button
+        class="text-link"
+        onclick={() => openUrl("https://discord.com/developers/applications")}
+      >
+        Open the Discord developer portal
+      </button>
+    </details>
+
+    <div class="switches">
+      <label class="switch-row">
+        <span>
+          <strong>Enable Rich Presence</strong>
+          <small>
+            Album art is looked up on Deezer, then iTunes, since Discord can't read
+            covers off your disk. Anything neither has falls back to your app's icon.
+          </small>
+        </span>
+        <input type="checkbox" bind:checked={discord.enabled} />
+      </label>
+    </div>
+
+    <div class="lastfm-actions">
+      <button class="pill-btn filled" disabled={discord.busy} onclick={() => discord.save()}>
+        {discord.busy ? "Saving…" : "Save Settings"}
+      </button>
+    </div>
+
+    <div class="feedback" aria-live="polite">
+      {#if discord.enabled && !discord.connected}
+        <span class="error" role="alert">
+          {#if /client id/i.test(discord.lastError)}
+            Discord rejected that application ID. Copy the <strong>Application ID</strong>
+            from your app's General Information page — not the public key or a bot token.
+          {:else if discord.lastError}
+            Can't reach Discord ({discord.lastError}). Aria reconnects on its own once
+            Discord is running.
+          {:else}
+            Waiting for Discord — start it and play something.
+          {/if}
+        </span>
+      {:else if discord.notice}
+        <span>{discord.notice}</span>
+      {/if}
+    </div>
   </section>
 
   <section aria-busy={lastfm.busy}>
@@ -231,6 +382,12 @@
     font-size: 19px;
     font-weight: 700;
   }
+  h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-dim);
+    margin: 26px 0 0;
+  }
   .tools {
     display: flex;
     gap: 8px;
@@ -282,7 +439,7 @@
   }
   .remove:hover {
     background: var(--active);
-    color: #ff5a5a;
+    color: var(--danger);
   }
   .empty {
     color: var(--text-dim);
@@ -293,6 +450,215 @@
     font-size: 12px;
     color: var(--text-faint);
   }
+  /* Theme picker ---------------------------------------------------------- */
+
+  .skins {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+  }
+  .skin {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 10px 12px 12px;
+    text-align: left;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    transition:
+      border-color 0.15s,
+      background 0.15s,
+      transform 220ms var(--motion-spring);
+  }
+  .skin:hover {
+    background: var(--hover);
+  }
+  .skin.on {
+    border-color: var(--accent);
+    background: var(--active);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .skin strong {
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  .skin small {
+    color: var(--text-dim);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  /* Each preview paints the theme it offers, not the one currently applied, so
+     its colours are literal rather than tokens. It follows the system light/dark
+     setting because both themes do. */
+  .preview {
+    display: flex;
+    height: 82px;
+    border-radius: 7px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .p-rail {
+    width: 34%;
+    flex: none;
+    border-right: 1px solid;
+    padding: 9px 7px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .p-nav {
+    height: 6px;
+    border-radius: 3px;
+    width: 84%;
+  }
+  .p-nav.on {
+    width: 100%;
+  }
+  .p-body {
+    flex: 1;
+    position: relative;
+    padding: 9px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .p-title {
+    font-size: 15px;
+    line-height: 1;
+    font-weight: 700;
+  }
+  .p-row {
+    height: 5px;
+    border-radius: 3px;
+    width: 100%;
+  }
+  .p-row.short {
+    width: 62%;
+  }
+  .p-accent {
+    position: absolute;
+    right: 9px;
+    bottom: 9px;
+    width: 20px;
+    height: 8px;
+    border-radius: 4px;
+  }
+
+  [data-skin-preview="claude"] .p-rail {
+    background: #f0eee6;
+    border-right-color: rgba(61, 48, 33, 0.14);
+  }
+  [data-skin-preview="claude"] .p-body {
+    background: #faf9f5;
+  }
+  [data-skin-preview="claude"] .p-title {
+    color: #141413;
+    font-family: "Copernicus", "Tiempos Text", Charter, Georgia, serif;
+    font-weight: 600;
+  }
+  [data-skin-preview="claude"] .p-row {
+    background: rgba(20, 20, 19, 0.14);
+  }
+  [data-skin-preview="claude"] .p-nav {
+    background: rgba(20, 20, 19, 0.13);
+  }
+  [data-skin-preview="claude"] .p-nav.on {
+    background: rgba(174, 83, 48, 0.28);
+  }
+  [data-skin-preview="claude"] .p-accent {
+    background: #ae5330;
+  }
+
+  /* Aria's identity is the blurred album-colour field, so the preview shows the
+     default artwork palette under a frosted panel. */
+  [data-skin-preview="aria"] .p-rail {
+    background:
+      linear-gradient(160deg, rgba(245, 245, 247, 0.62), rgba(245, 245, 247, 0.42)),
+      linear-gradient(140deg, rgb(182, 141, 93), rgb(122, 75, 100));
+    border-right-color: rgba(0, 0, 0, 0.1);
+  }
+  [data-skin-preview="aria"] .p-body {
+    background:
+      linear-gradient(0deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.72)),
+      radial-gradient(circle at 20% 0%, rgb(216, 177, 128), transparent 62%),
+      radial-gradient(circle at 90% 100%, rgb(71, 62, 113), transparent 66%),
+      linear-gradient(140deg, rgb(182, 141, 93), rgb(122, 75, 100));
+  }
+  [data-skin-preview="aria"] .p-title {
+    color: #1d1d1f;
+    letter-spacing: -0.5px;
+    font-weight: 800;
+    /* Spelled out rather than inherited — a preview must show its own theme's
+       face, not the one currently applied to the app around it. */
+    font-family:
+      "SF Pro Display", -apple-system, "Segoe UI Variable", "Segoe UI", system-ui,
+      sans-serif;
+  }
+  [data-skin-preview="aria"] .p-row {
+    background: rgba(0, 0, 0, 0.16);
+  }
+  [data-skin-preview="aria"] .p-nav {
+    background: rgba(0, 0, 0, 0.14);
+  }
+  [data-skin-preview="aria"] .p-nav.on {
+    background: rgba(255, 255, 255, 0.6);
+  }
+  [data-skin-preview="aria"] .p-accent {
+    background: rgb(182, 141, 93);
+    border-radius: 980px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    [data-skin-preview="claude"] .p-rail {
+      background: #1f1e1d;
+      border-right-color: rgba(255, 255, 255, 0.1);
+    }
+    [data-skin-preview="claude"] .p-body {
+      background: #262624;
+    }
+    [data-skin-preview="claude"] .p-title {
+      color: #f5f4ee;
+    }
+    [data-skin-preview="claude"] .p-row {
+      background: rgba(245, 244, 238, 0.17);
+    }
+    [data-skin-preview="claude"] .p-nav {
+      background: rgba(245, 244, 238, 0.16);
+    }
+    [data-skin-preview="claude"] .p-nav.on {
+      background: rgba(217, 119, 87, 0.4);
+    }
+    [data-skin-preview="claude"] .p-accent {
+      background: #d97757;
+    }
+
+    [data-skin-preview="aria"] .p-rail {
+      background:
+        linear-gradient(160deg, rgba(24, 24, 27, 0.6), rgba(24, 24, 27, 0.4)),
+        linear-gradient(140deg, rgb(182, 141, 93), rgb(122, 75, 100));
+      border-right-color: rgba(255, 255, 255, 0.1);
+    }
+    [data-skin-preview="aria"] .p-body {
+      background:
+        linear-gradient(0deg, rgba(16, 16, 18, 0.66), rgba(16, 16, 18, 0.66)),
+        radial-gradient(circle at 20% 0%, rgb(216, 177, 128), transparent 62%),
+        radial-gradient(circle at 90% 100%, rgb(71, 62, 113), transparent 66%),
+        linear-gradient(140deg, rgb(182, 141, 93), rgb(122, 75, 100));
+    }
+    [data-skin-preview="aria"] .p-title {
+      color: #f5f5f7;
+    }
+    [data-skin-preview="aria"] .p-row {
+      background: rgba(255, 255, 255, 0.22);
+    }
+    [data-skin-preview="aria"] .p-nav {
+      background: rgba(255, 255, 255, 0.2);
+    }
+  }
+
   .backdrops {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -359,6 +725,17 @@
   .swatch[data-preview="external"] {
     background: repeating-conic-gradient(var(--hover) 0 25%, transparent 0 50%) 0 0 / 12px 12px;
   }
+  /* Under a flat theme "Solid" is paper, not an artwork field — the default
+     gradient would promise colour the window will never paint. */
+  :global(html[data-skin="claude"]) .swatch[data-preview="opaque"] {
+    background:
+      radial-gradient(
+        circle at 100% 100%,
+        color-mix(in srgb, var(--art-primary) 26%, transparent),
+        transparent 62%
+      ),
+      linear-gradient(135deg, var(--bg), var(--sidebar));
+  }
   .wash-row {
     display: flex;
     align-items: center;
@@ -398,6 +775,41 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
+  }
+  /* A lone field shouldn't stretch to the full 720px measure. */
+  .credential-grid.one {
+    grid-template-columns: minmax(0, 420px);
+  }
+  /* Escape hatch for the one setting almost nobody needs, folded away so the
+     section reads as "it already works" rather than "configure me". */
+  .advanced {
+    margin: 4px 0 14px;
+  }
+  .advanced > summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 650;
+    color: var(--text-dim);
+    padding: 6px 0;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .advanced > summary::-webkit-details-marker {
+    display: none;
+  }
+  .advanced > summary::before {
+    content: "›";
+    display: inline-block;
+    transition: transform 160ms var(--motion-spring);
+    font-size: 14px;
+  }
+  .advanced[open] > summary::before {
+    transform: rotate(90deg);
+  }
+  .advanced > summary:hover {
+    color: var(--text);
   }
   .credential-grid label {
     display: flex;
@@ -488,7 +900,7 @@
     font-size: 12px;
   }
   .error {
-    color: #ff6b6b;
+    color: var(--danger);
   }
   @media (max-width: 760px) {
     .credential-grid {

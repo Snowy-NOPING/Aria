@@ -129,11 +129,15 @@
   .lyrics-wrap :global(.line) {
     font-size: clamp(21px, 1.65vw, 30px);
     color: var(--text);
-    opacity: 0.25;
+    /* Knobs, not `opacity` — see LyricsPanel. Narrow panel, so a gentler blur
+       step: fewer lines are visible and heavy softening just reads as blurry. */
+    --lyric-dim: 0.34;
+    --lyric-past: 0.22;
+    --lyric-lit: 0.95;
+    --lyric-blur-step: 0.4px;
   }
   .lyrics-wrap :global(.line.active) {
     color: var(--text);
-    opacity: 0.95;
   }
   .queue {
     flex: 1;

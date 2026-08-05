@@ -3,6 +3,7 @@
   import { player } from "$lib/player.svelte";
   import { ui } from "$lib/ui.svelte";
   import { layout } from "$lib/layout.svelte";
+  import { theme } from "$lib/theme.svelte";
   import {
     DEFAULT_ARTWORK_PALETTE,
     extractArtworkPalette,
@@ -33,17 +34,30 @@
 
   function applyPalette(palette: ArtworkPalette) {
     const root = document.documentElement;
-    root.style.setProperty("--accent", palette.accent);
-    root.style.setProperty("--accent-2", palette.accentLight);
-    root.style.setProperty("--art-primary", palette.primary);
-    root.style.setProperty("--art-secondary", palette.secondary);
-    root.style.setProperty("--art-tertiary", palette.tertiary);
-    root.style.setProperty("--art-deep", palette.deep);
+    const entries: [string, string][] = [
+      ["--accent", palette.accent],
+      ["--accent-2", palette.accentLight],
+      ["--art-primary", palette.primary],
+      ["--art-secondary", palette.secondary],
+      ["--art-tertiary", palette.tertiary],
+      ["--art-deep", palette.deep],
+    ];
+    // A fixed-palette skin (Claude) must not be repainted by the artwork. These
+    // are inline properties, which outrank the stylesheet, so it isn't enough to
+    // stop writing them — the previous track's colours have to be cleared.
+    for (const [name, value] of entries) {
+      if (theme.artworkField) root.style.setProperty(name, value);
+      else root.style.removeProperty(name);
+    }
   }
 
   // Keep the previous background visible until the next artwork palette is ready,
   // then crossfade the entire colour field as one layer.
   $effect(() => {
+    // Read explicitly: the palette write below happens in a promise callback,
+    // outside this effect's tracking scope, so a skin change would not
+    // otherwise re-run it and clear the stale inline colours.
+    void theme.skin;
     const art = player.current?.art;
     const key = player.current?.path ?? art ?? "fallback";
     if (!art) {
@@ -73,17 +87,22 @@
 
 <div class="app">
   <Titlebar />
-  <div class="background-stack" aria-hidden="true">
-    {#key backdrop.key}
-      <div
-        class="background-frame"
-        in:fade={{ duration: 650 }}
-        out:fade={{ duration: 420 }}
-      >
-        <DynamicBackground art={backdrop.art} palette={backdrop.palette} />
-      </div>
-    {/key}
-  </div>
+  <!-- Skins without a colour field paint nothing here, so the layer is left out
+       entirely rather than rendered at zero opacity — four blurred, animating
+       blobs are not free. -->
+  {#if theme.artworkField}
+    <div class="background-stack" aria-hidden="true">
+      {#key backdrop.key}
+        <div
+          class="background-frame"
+          in:fade={{ duration: 650 }}
+          out:fade={{ duration: 420 }}
+        >
+          <DynamicBackground art={backdrop.art} palette={backdrop.palette} />
+        </div>
+      {/key}
+    </div>
+  {/if}
 
   <div class="workspace">
     <Sidebar />
@@ -105,7 +124,7 @@
 
 <EditTagsModal />
 {#if ui.immersive}
-  <Immersive />
+  <Immersive {backdrop} />
 {/if}
 
 <ContextMenu />
@@ -165,7 +184,7 @@
     overflow: hidden;
     position: relative;
     background: color-mix(in srgb, var(--bg) var(--content-alpha), transparent);
-    backdrop-filter: blur(22px) saturate(1.08);
+    backdrop-filter: var(--content-blur);
   }
   @keyframes background-arrive {
     from {

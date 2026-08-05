@@ -4,6 +4,7 @@ export type View =
   | "songs"
   | "albums"
   | "album"
+  | "artist"
   | "videos"
   | "playlists"
   | "playlist"
