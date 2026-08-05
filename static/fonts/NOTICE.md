@@ -13,14 +13,30 @@ Verbatim from the font's own `name` table:
   Version 1.1. This license is available with a FAQ at:
   https://openfontlicense.org
 
-The OFL permits bundling and redistribution. **The full OFL 1.1 text is not yet
-included here** — it was not available offline when the font was added. Before
-distributing Aria outside this machine, drop `OFL.txt` from
-https://openfontlicense.org (or the Figtree repository) into this folder, since
-the OFL requires the license text to travel with the font.
+The OFL permits bundling and redistribution, and requires the license text to
+travel with the font. `OpenRunde-LICENSE.txt` in this folder is the full OFL 1.1
+text and covers that requirement for both fonts; only its copyright line is
+specific to Open Runde. Figtree's own copyright is quoted above.
 
 Used for lyrics only, via `--font-lyrics` in `src/app.css`. Figtree is also what
 Cider uses for its lyrics view, which is where the look comes from.
+
+## Open Runde (`OpenRunde-{Regular,Medium,Semibold,Bold}.woff2`)
+
+- **Copyright:** Copyright (c) 2016 The Inter Project Authors
+  (https://github.com/rsms/inter) — Open Runde is Lauris Kern's rounded
+  derivative, https://github.com/lauridskern/open-runde
+- **License:** SIL Open Font License 1.1, full text in
+  `OpenRunde-LICENSE.txt`.
+
+The fallback for SF Pro. SF can't be redistributed, so a checkout that doesn't
+have it needs somewhere to land, and Open Runde's rounded terminals stay far
+closer to SF than Segoe UI does. It sits behind SF Pro in `--font` and
+`--font-display`: an `@font-face` whose file is missing is skipped, so the stack
+is the only switch involved. 800 is synthesised from Bold.
+
+Upstream WOFF2s subset to Latin + Latin-Ext with `fontTools.subset`
+(645 KB -> 288 KB), matching what was done to SF Pro.
 
 ## SF Pro (SFProText-*.woff2, SFProDisplay-*.woff2)
 

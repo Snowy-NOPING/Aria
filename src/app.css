@@ -13,6 +13,39 @@
   font-display: block;
 }
 
+/* Open Runde — the stand-in when SF Pro isn't on disk. It's an Inter-derived
+   rounded face under the OFL, so unlike SF it can travel with the repo, and its
+   softness sits closer to SF than Segoe does. Four static weights: 800 (the
+   heaviest display sizes) is synthesised from Bold. */
+@font-face {
+  font-family: "Open Runde";
+  src: url("/fonts/OpenRunde-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Open Runde";
+  src: url("/fonts/OpenRunde-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Open Runde";
+  src: url("/fonts/OpenRunde-Semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Open Runde";
+  src: url("/fonts/OpenRunde-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* San Francisco, subset to Latin + Latin-Ext. Apple ships two optical sizes and
    they are not interchangeable: Text has looser spacing and taller lowercase for
    UI sizes, Display tightens up for headings. Anything outside the subset (CJK,
@@ -78,15 +111,21 @@
 :root {
   /* Body copy leads with the Text cut — it is drawn for exactly these sizes.
      Leading with Display here would set the whole UI in a face optimised for
-     34px headings, which reads cramped at 13px. */
+     34px headings, which reads cramped at 13px.
+
+     Open Runde sits behind SF Pro rather than beside it: SF's files are not
+     redistributable, so a checkout without them has to land somewhere chosen.
+     A browser skips a family whose @font-face never loads, which makes the
+     stack itself the switch — no build flag, no detection. Segoe stays last
+     for the glyphs neither face carries. */
   --font:
-    "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont,
+    "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont, "Open Runde",
     "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   /* Display face for view titles and detail headings — the tighter optical cut.
      Skins that want a separate voice for headings override it. */
   --font-display:
     "SF Pro Display", "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont,
-    "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    "Open Runde", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   /* Lyrics get their own face. Big, geometric and even-weighted reads better at
      display sizes than the UI stack, whose heavy weights are synthesised on
      Windows. Same choice Cider makes. */
