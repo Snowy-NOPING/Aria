@@ -1,6 +1,7 @@
 <script lang="ts">
   import { nav } from "$lib/nav.svelte";
   import { library } from "$lib/library.svelte";
+  import { ui } from "$lib/ui.svelte";
 
   let { artist }: { artist: string } = $props();
 
@@ -9,6 +10,9 @@
   function open(e: MouseEvent, name: string) {
     // Track rows are clickable too, and a click on the artist means the artist.
     e.stopPropagation();
+    // The artist page is behind the immersive overlay, so opening one there has
+    // to leave it — otherwise the click looks like it did nothing.
+    if (ui.immersive) void ui.exit();
     nav.go("artist", name);
   }
 </script>

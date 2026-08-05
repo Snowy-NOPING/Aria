@@ -19,14 +19,25 @@
  * artworks flow as one field rather than as two images fading past each other.
  */
 
-/** Longest edge of the downscaled texture. Fewer pixels, softer wash. */
-const TEXTURE_EDGE = 56;
+/**
+ * Longest edge of the downscaled texture. Fewer pixels means a softer wash, but
+ * too few and the interpolation between them starts showing its seams as
+ * lozenge-shaped facets — the "cheap upscale" look. This keeps enough of the
+ * cover's structure that the warp has something to move.
+ */
+const TEXTURE_EDGE = 128;
 
 /** How long a change of artwork takes to dissolve. */
 const FADE_MS = 1200;
 
-/** Cap on the render target. The image is a wash — resolution buys nothing. */
-const MAX_WIDTH = 640;
+/**
+ * Cap on the render target. The wash carries no detail, but it does carry wide
+ * smooth gradients, and those are exactly what shows every missing pixel once
+ * the browser stretches the canvas back up. Rendering at native density and
+ * letting this cap bite only on very large windows costs almost nothing — the
+ * shader is a handful of instructions per pixel.
+ */
+const MAX_WIDTH = 1920;
 
 const VERT = `#version 300 es
 in vec2 aPos;
@@ -49,6 +60,7 @@ uniform vec2 uNextCover;
 uniform float uMix;
 uniform float uTime;
 uniform float uWarp;
+uniform float uBrightness;
 
 // Value noise: a hash at each lattice point, smoothstepped between. Cheaper
 // than simplex and indistinguishable once it is only being used to nudge
@@ -95,11 +107,28 @@ void main() {
   vec2 uv = p + warp + drift;
   vec3 prev = texture(uPrev, cover(uv, uPrevCover)).rgb;
   vec3 next = texture(uNext, cover(uv, uNextCover)).rgb;
-  vec3 col = mix(prev, next, uMix);
+
+  // Blend where light actually adds up. Crossfading sRGB values directly dips
+  // through a muddy grey halfway between two colours; going linear first keeps
+  // the dissolve luminous.
+  vec3 col = mix(prev * prev, next * next, uMix);
+  col = sqrt(col);
 
   // Downscaling averages colour together, which desaturates. Push it back.
   float luma = dot(col, vec3(0.299, 0.587, 0.114));
   col = clamp(mix(vec3(luma), col, 1.22), 0.0, 1.0);
+
+  // Applied here rather than as a CSS filter on the canvas: darkening after the
+  // dither would scale the dither below one 8-bit step and the banding it was
+  // added to hide would come straight back.
+  col *= uBrightness;
+
+  // A window-wide gradient crosses hundreds of pixels per 8-bit step, so it
+  // bands into visible stripes. A sub-step of noise per pixel breaks the step
+  // edges up and the eye reads the average — the single biggest difference
+  // between this looking cheap and looking smooth.
+  float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  col += (dither - 0.5) / 255.0;
 
   fragColor = vec4(col, 1.0);
 }`;
@@ -164,7 +193,27 @@ async function loadLayer(
   if (!ctx) return null;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(img, 0, 0, tw, th);
+  // Halve repeatedly rather than dropping 1000px to 128 in one call: a single
+  // large downscale samples a sparse grid of the source and drops most of it,
+  // which is where the crunchy, aliased look comes from. Each halving averages
+  // every pixel it consumes, so the colour that arrives is the true average.
+  let stepW = w;
+  let stepH = h;
+  let stage: HTMLCanvasElement | HTMLImageElement = img;
+  while (stepW > tw * 2 && stepH > th * 2) {
+    stepW = Math.max(tw, Math.round(stepW / 2));
+    stepH = Math.max(th, Math.round(stepH / 2));
+    const half = document.createElement("canvas");
+    half.width = stepW;
+    half.height = stepH;
+    const halfCtx = half.getContext("2d");
+    if (!halfCtx) break;
+    halfCtx.imageSmoothingEnabled = true;
+    halfCtx.imageSmoothingQuality = "high";
+    halfCtx.drawImage(stage, 0, 0, stepW, stepH);
+    stage = half;
+  }
+  ctx.drawImage(stage, 0, 0, tw, th);
 
   const tex = gl.createTexture();
   if (!tex) return null;
@@ -233,9 +282,18 @@ export function createArtworkField(canvas: HTMLCanvasElement): ArtworkField | nu
     mix: gl.getUniformLocation(program, "uMix"),
     time: gl.getUniformLocation(program, "uTime"),
     warp: gl.getUniformLocation(program, "uWarp"),
+    brightness: gl.getUniformLocation(program, "uBrightness"),
   };
   gl.uniform1i(u.prev, 0);
   gl.uniform1i(u.next, 1);
+
+  // The same token the CSS wash used, so the field keeps the luminance the rest
+  // of the window's contrast was tuned against. Read once: it's a static theme
+  // token, not something that changes while the app runs.
+  const declared = parseFloat(
+    getComputedStyle(canvas).getPropertyValue("--dynamic-bg-brightness"),
+  );
+  const brightness = Number.isFinite(declared) ? declared / 100 : 0.58;
 
   const stillness = window.matchMedia?.("(prefers-reduced-motion: reduce)");
 
@@ -251,9 +309,10 @@ export function createArtworkField(canvas: HTMLCanvasElement): ArtworkField | nu
   function sizeToCanvas() {
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    // Half density, capped: a warped wash of 56-pixel textures has no detail
-    // that a higher resolution could show.
-    const w = Math.max(2, Math.min(MAX_WIDTH, Math.round(rect.width * dpr * 0.5)));
+    // Native density up to the cap. Below it the browser stretches the canvas
+    // back up, and a bilinear upscale of an already-smooth gradient is where
+    // the softness turns into visible mush.
+    const w = Math.max(2, Math.min(MAX_WIDTH, Math.round(rect.width * dpr)));
     const h = Math.max(2, Math.round((rect.height / Math.max(1, rect.width)) * w));
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
@@ -289,6 +348,7 @@ export function createArtworkField(canvas: HTMLCanvasElement): ArtworkField | nu
     gl!.uniform1f(u.mix, mix);
     gl!.uniform1f(u.time, seconds);
     gl!.uniform1f(u.warp, 0.075);
+    gl!.uniform1f(u.brightness, brightness);
     gl!.drawArrays(gl!.TRIANGLES, 0, 3);
     painted = true;
 

@@ -4,6 +4,7 @@
   import { player, formatTime } from "$lib/player.svelte";
   import { ui } from "$lib/ui.svelte";
   import Artwork from "$lib/Artwork.svelte";
+  import ArtistLink from "$lib/ArtistLink.svelte";
   import LyricsPanel from "$lib/LyricsPanel.svelte";
   import ImmersiveIcon from "$lib/icons/ImmersiveIcon.svelte";
   import Sidebar from "$lib/Sidebar.svelte";
@@ -203,7 +204,9 @@
               <div class="track-subtitle">
                 {#if player.current}
                   {player.current.album}
-                  {#if player.current.artist}<span> — {player.current.artist}</span>{/if}
+                  {#if player.current.artist}<span>
+                      — <ArtistLink artist={player.current.artist} />
+                    </span>{/if}
                 {/if}
               </div>
             </div>
@@ -234,7 +237,9 @@
         {#if idle}
           <div class="idle-meta" transition:fade={{ duration: 180 }}>
             <div class="track-title">{player.current?.title ?? "Not Playing"}</div>
-            <div class="idle-artist">{player.current?.artist ?? ""}</div>
+            <div class="idle-artist">
+              {#if player.current?.artist}<ArtistLink artist={player.current.artist} />{/if}
+            </div>
           </div>
         {:else}
           <div class="main-controls" transition:fade={{ duration: 180 }}>

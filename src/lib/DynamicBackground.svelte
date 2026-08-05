@@ -79,11 +79,16 @@
            mirrored second copy keeps the field reorganising itself. -->
       <div class="cover-wash" style="background-image:url({art})"></div>
       <div class="cover-wash cover-wash-alt" style="background-image:url({art})"></div>
+      <!-- Four gradients in three sampled colours, screened over the wash. They
+           exist to put colour where a CSS blur of one image goes flat, and they
+           are only drawn on this path: over the shader they would be a
+           three-swatch approximation of the cover smeared across the real
+           thing, which reads as a cheaper image than the one underneath. -->
+      <div class="colour-blob blob-one"></div>
+      <div class="colour-blob blob-two"></div>
+      <div class="colour-blob blob-three"></div>
+      <div class="colour-blob blob-four"></div>
     {/if}
-    <div class="colour-blob blob-one"></div>
-    <div class="colour-blob blob-two"></div>
-    <div class="colour-blob blob-three"></div>
-    <div class="colour-blob blob-four"></div>
     <div class="readability-veil"></div>
   </div>
 {/if}
@@ -116,8 +121,11 @@
     opacity: 0;
     transition: opacity 600ms ease;
   }
+  /* Full strength: the shader already carries the cover's own colour, and
+     thinning it only mixes the flat base fill back in. `--wash-opacity` on the
+     wrapper is still what dials the whole field down. */
   .field.live {
-    opacity: 0.88;
+    opacity: 1;
   }
 
   .cover-wash {
