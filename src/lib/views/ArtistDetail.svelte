@@ -2,7 +2,14 @@
   import { library } from "$lib/library.svelte";
   import { player, formatTime } from "$lib/player.svelte";
   import { nav } from "$lib/nav.svelte";
+  import { theme } from "$lib/theme.svelte";
+  import {
+    DEFAULT_ARTWORK_PALETTE,
+    extractArtworkPalette,
+    type ArtworkPalette,
+  } from "$lib/accent";
   import AlbumCard from "$lib/AlbumCard.svelte";
+  import DynamicBackground from "$lib/DynamicBackground.svelte";
   import TrackList from "$lib/TrackList.svelte";
 
   const name = $derived(nav.param ?? "");
@@ -14,6 +21,29 @@
    *  behind the name as a colour field instead. */
   const borrowed = $derived(!!image && !library.artistImages[name]);
   const totalTime = $derived(tracks.reduce((s, t) => s + t.duration, 0));
+
+  /**
+   * The page carries its own colour field, taken from the banner, so the artist
+   * you're reading colours the pane while the sidebar, player and lyrics keep
+   * the playing track's. It lives inside this view rather than replacing the
+   * window backdrop for that reason — two different things are on screen and
+   * each keeps its own colour.
+   */
+  let field = $state<ArtworkPalette>(DEFAULT_ARTWORK_PALETTE);
+  $effect(() => {
+    const src = image;
+    if (!src) {
+      field = DEFAULT_ARTWORK_PALETTE;
+      return;
+    }
+    let cancelled = false;
+    extractArtworkPalette(src).then((palette) => {
+      if (!cancelled) field = palette ?? DEFAULT_ARTWORK_PALETTE;
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
 
   function play(i: number) {
     player.setQueue(tracks, i);
@@ -32,7 +62,15 @@
   }
 </script>
 
-<div class="view">
+<div class="artist-page">
+  <!-- Behind the scroller, not in it, so the field stays put while the page
+       moves over it. A fixed-palette skin paints no field at all. -->
+  {#if image && theme.artworkField}
+    <div class="field" aria-hidden="true">
+      <DynamicBackground art={image} palette={field} />
+    </div>
+  {/if}
+  <div class="view">
   {#if !name || tracks.length === 0}
     <div class="note">Nothing in your library is credited to {name || "this artist"}.</div>
   {:else}
@@ -90,9 +128,25 @@
       <TrackList {tracks} onplay={play} showArt={true} />
     </section>
   {/if}
+  </div>
 </div>
 
 <style>
+  /* The view is the scroller; the field sits behind it, both filling the pane. */
+  .artist-page {
+    position: absolute;
+    inset: 0;
+  }
+  .field {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .view {
+    position: relative;
+    z-index: 1;
+  }
   .back {
     display: inline-flex;
     align-items: center;
@@ -132,6 +186,11 @@
     background-position: center 32%;
     background-size: cover;
     background-repeat: no-repeat;
+    /* The photo is masked away at the bottom rather than covered by a fade to
+       the page colour: what's underneath is the artist's own colour field, and
+       painting a band of `--bg` over it would put a seam between the two. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 56%, transparent 98%);
+    mask-image: linear-gradient(to bottom, #000 56%, transparent 98%);
   }
   /* Scaled past the edges so the blur has material to work with instead of
      fading out against the sides. */
@@ -150,17 +209,17 @@
     background: var(--bg-deep);
     border-bottom: 1px solid var(--border);
   }
-  /* The scrim does two jobs: it holds white text legible over an unknown photo,
-     and it dissolves the image into the page instead of cutting it off with a
-     hard edge. Sitting in a pseudo-element keeps it off the content. */
+  /* Holds white text legible over a photo nobody chose for contrast: a wash at
+     the top for the Back button, and one from the left running the full height,
+     since the name sits low where the image has already faded into the field.
+     A pseudo-element keeps it off the content. */
   .banner.photo::after {
     content: "";
     position: absolute;
     inset: 0;
     background:
       linear-gradient(to bottom, rgba(0, 0, 0, 0.34) 0%, transparent 32%),
-      linear-gradient(to top, var(--bg) 0%, color-mix(in srgb, var(--bg) 55%, transparent) 26%, transparent 62%),
-      linear-gradient(to right, rgba(0, 0, 0, 0.45), transparent 62%);
+      linear-gradient(to right, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.12) 45%, transparent 70%);
     pointer-events: none;
   }
   /* Above both the image layer and the scrim. */

@@ -57,6 +57,12 @@ function baseName(dir: string): string {
   return i >= 0 ? dir.slice(i + 1) : dir;
 }
 
+/** For comparing two paths that mean the same folder. Windows is case-blind and
+ *  doesn't care which slash you use, and a trailing one carries no meaning. */
+function samePath(a: string): string {
+  return a.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+}
+
 /** Disc order where tags provide it, alphabetical where they don't. */
 function byTrackOrder(a: TrackMeta, b: TrackMeta): number {
   const an = a.track_number ?? Number.MAX_SAFE_INTEGER;
@@ -186,10 +192,16 @@ class Library {
     const claimed = new Set(
       this.albums.map((a) => a.folder).filter((f): f is string => !!f),
     );
+    // A folder you pointed the library at is a library, not a release: loose
+    // files sitting directly in Music are songs, and calling that pile "Music"
+    // puts a fake album next to the real ones. Only what's filed in a subfolder
+    // counts. (Adding a single album folder as a library root therefore hides
+    // it from Albums — remove the root and add its parent instead.)
+    const roots = new Set(this.folders.map(samePath));
     const byDir = new Map<string, TrackMeta[]>();
     for (const t of this.tracks) {
       const dir = dirOf(t.path);
-      if (claimed.has(dir)) continue;
+      if (claimed.has(dir) || roots.has(samePath(dir))) continue;
       const list = byDir.get(dir);
       if (list) list.push(t);
       else byDir.set(dir, [t]);
