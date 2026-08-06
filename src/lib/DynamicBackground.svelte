@@ -8,10 +8,12 @@
     // Names the instance in the diagnostic — "the field failed" is only useful
     // if you know which of the three (window, immersive, artist page) it was.
     label = "field",
+    saturation = 1.22,
   }: {
     art?: string | null;
     palette: ArtworkPalette;
     label?: string;
+    saturation?: number;
   } = $props();
 
   const paletteStyle = $derived(
@@ -43,14 +45,18 @@
     // in for the life of the component, which is how a working GPU ends up
     // showing the fallback. Retry a couple of times before believing it.
     const attach = () => {
-      made = createArtworkField(target, () => {
-        // Context lost. The canvas is still restorable, so start over on it
-        // rather than dropping to the CSS wash for the rest of the session.
-        field = null;
-        live = false;
-        attempt = 0;
-        timer = window.setTimeout(attach, 500);
-      });
+      made = createArtworkField(
+        target,
+        () => {
+          // Context lost. The canvas is still restorable, so start over on it
+          // rather than dropping to the CSS wash for the rest of the session.
+          field = null;
+          live = false;
+          attempt = 0;
+          timer = window.setTimeout(attach, 500);
+        },
+        saturation,
+      );
       if (made) {
         field = made;
         return;

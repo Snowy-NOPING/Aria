@@ -7,6 +7,28 @@
   const recent = $derived(library.recentSongs);
   const albums = $derived(library.allAlbums);
 
+  /**
+   * The artists you own most of, with a picture each. Art is gathered in one
+   * pass over the library rather than by asking `library.artistArt` twelve
+   * times — that walks every album looking for a cover, which is a fine price
+   * on an artist's own page and a silly one for a row of thumbnails.
+   */
+  const artists = $derived.by(() => {
+    const names = library.topArtists(12);
+    if (!names.length) return [];
+    const wanted = new Map(names.map((n) => [n.toLowerCase(), n]));
+    const art = new Map<string, string>();
+    for (const t of library.tracks) {
+      if (!t.art) continue;
+      const key = library.filedUnder(t).toLowerCase();
+      if (wanted.has(key) && !art.has(key)) art.set(key, t.art);
+    }
+    return names.map((name) => ({
+      name,
+      art: library.artistImages[name] ?? art.get(name.toLowerCase()) ?? null,
+    }));
+  });
+
   function cover(id: string): string | null {
     const a = library.albumById(id);
     if (a?.art) return a.art;
@@ -26,6 +48,27 @@
       <p class="hint">Aria watches <code>Music</code> and <code>Videos</code> by default.</p>
     </div>
   {:else}
+    <!-- Artists first: it's the coarsest way into a library, and everything
+         below is a narrower slice of the same thing. -->
+    {#if artists.length > 0}
+      <section>
+        <div class="row-head">
+          <h2>Artists</h2>
+        </div>
+        <div class="grid">
+          {#each artists as artist (artist.name)}
+            <AlbumCard
+              art={artist.art}
+              title={artist.name}
+              round
+              onclick={() => nav.go("artist", artist.name)}
+              onplay={() => player.setQueue(library.artistTracks(artist.name), 0)}
+            />
+          {/each}
+        </div>
+      </section>
+    {/if}
+
     {#if albums.length > 0}
       <section>
         <div class="row-head">

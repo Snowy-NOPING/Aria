@@ -109,7 +109,15 @@
   {#if theme.artworkField}
     <div class="background-stack" aria-hidden="true">
       <div class="background-frame">
-        <DynamicBackground art={backdrop.art} palette={backdrop.palette} label="immersive" />
+        <!-- Richer than the window's field: nothing is layered over this one,
+             so the colour has to carry the whole screen rather than sit under
+             a library. -->
+        <DynamicBackground
+          art={backdrop.art}
+          palette={backdrop.palette}
+          label="immersive"
+          saturation={1.75}
+        />
       </div>
     </div>
   {/if}

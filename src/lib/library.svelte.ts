@@ -3,7 +3,13 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { audioDir, videoDir } from "@tauri-apps/api/path";
 import type { TrackMeta } from "./player.svelte";
 import { lyrics } from "./lyrics.svelte";
-import { credits, artistNames, splitCredits, type Credit } from "./artists";
+import {
+  credits,
+  artistNames,
+  primaryArtist,
+  splitCredits,
+  type Credit,
+} from "./artists";
 
 /** A user-created album, backed by its own folder on disk. */
 export interface Album {
@@ -15,6 +21,10 @@ export interface Album {
   /** Folder on disk holding this album's files. Albums made before this
    *  existed have none, and keep working as pure collections. */
   folder?: string;
+  /** Tracks whose album tag matches this album but which the user took out of
+   *  it. Without this, tag matching would put every one of them back on the
+   *  next scan and removing a track would be impossible. */
+  excluded?: string[];
 }
 
 export interface Playlist {
@@ -330,6 +340,33 @@ class Library {
     return albumArt ?? this.artistTracks(name).find((t) => t.art)?.art ?? null;
   }
 
+  /**
+   * The name a track files under when the library is grouped by artist: the
+   * album artist where the tags give one, so a record with guests on half its
+   * songs stays in one place, and the lead credit otherwise.
+   */
+  filedUnder(t: TrackMeta): string {
+    const known = this.atomicArtists;
+    const billed = t.album_artist.trim() || t.artist.trim();
+    return primaryArtist(billed, known) || "Unknown Artist";
+  }
+
+  /** Artists with the most in the library, for a browsing row. */
+  topArtists(limit = 12): string[] {
+    const counts = new Map<string, { name: string; n: number }>();
+    for (const t of this.rawTracks) {
+      const name = this.filedUnder(t);
+      const key = name.toLowerCase();
+      const seen = counts.get(key);
+      if (seen) seen.n++;
+      else counts.set(key, { name, n: 1 });
+    }
+    return [...counts.values()]
+      .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
+      .slice(0, limit)
+      .map((a) => a.name);
+  }
+
   /** Distinct artists in the library, each credit counted on its own. */
   get artists(): string[] {
     const known = this.atomicArtists;
@@ -468,6 +505,52 @@ class Library {
     } finally {
       this.scanning = false;
     }
+    await this.absorbByAlbumTag();
+  }
+
+  /**
+   * File tracks into albums by their album tag: a song tagged "Currents" joins
+   * the album called Currents, without anyone adding it by hand.
+   *
+   * Membership only — the file is not moved on disk, unlike adding a track
+   * through the ⋯ menu. Matching runs on every scan, so moving files would mean
+   * the library quietly rearranging someone's folders at launch; that is a
+   * decision to take deliberately, not a side effect of reading tags.
+   *
+   * Runs after a scan and whenever an album's name changes, since both can
+   * create a match that didn't exist a moment ago.
+   */
+  private async absorbByAlbumTag() {
+    if (!this.albums.length) return;
+
+    // Name is the key, trimmed and case-blind — a tag reading "currents " is
+    // the same album as one reading "Currents". Two albums sharing a name is a
+    // user's business, but a track can only go to one, so the first wins.
+    const byName = new Map<string, Album>();
+    for (const album of this.albums) {
+      const key = album.name.trim().toLowerCase();
+      if (key && !byName.has(key)) byName.set(key, album);
+    }
+
+    const additions = new Map<string, string[]>();
+    for (const track of this.tracks) {
+      const key = track.album.trim().toLowerCase();
+      if (!key) continue;
+      const album = byName.get(key);
+      if (!album) continue;
+      if (album.trackPaths.includes(track.path)) continue;
+      if (album.excluded?.includes(track.path)) continue;
+      const queued = additions.get(album.id);
+      if (queued) queued.push(track.path);
+      else additions.set(album.id, [track.path]);
+    }
+    if (!additions.size) return;
+
+    this.albums = this.albums.map((album) => {
+      const queued = additions.get(album.id);
+      return queued ? { ...album, trackPaths: [...album.trackPaths, ...queued] } : album;
+    });
+    await this.save("albums", this.albums);
   }
 
   // --- Images ---------------------------------------------------------------
@@ -487,6 +570,9 @@ class Library {
   async setOverride(path: string, patch: Override) {
     this.overrides = { ...this.overrides, [path]: { ...this.overrides[path], ...patch } };
     await this.save("overrides", this.overrides);
+    // Editing a track's album to an album that exists should file it there, the
+    // same as if the tag had said so all along.
+    if (patch.album !== undefined) await this.absorbByAlbumTag();
   }
 
   async clearOverride(path: string) {
@@ -640,6 +726,8 @@ class Library {
     };
     this.albums = [...this.albums, a];
     await this.save("albums", this.albums);
+    // A new album can match tags that were sitting in the library already.
+    await this.absorbByAlbumTag();
     return a;
   }
 
@@ -667,6 +755,8 @@ class Library {
     }
     this.albums = this.albums.map((a) => (a.id === id ? { ...a, name: clean, folder } : a));
     await this.saveAfterMove();
+    // The new name may match tags the old one didn't.
+    await this.absorbByAlbumTag();
   }
   async setAlbumArtist(id: string, artist: string) {
     this.albums = this.albums.map((a) => (a.id === id ? { ...a, artist } : a));
@@ -720,7 +810,16 @@ class Library {
     }
 
     this.albums = this.albums.map((a) =>
-      a.id === id ? { ...a, trackPaths: a.trackPaths.filter((x) => x !== current) } : a,
+      a.id === id
+        ? {
+            ...a,
+            trackPaths: a.trackPaths.filter((x) => x !== current),
+            // Remember the removal: the track's album tag still says it belongs
+            // here, and tag matching would put it straight back on the next
+            // scan otherwise.
+            excluded: [...(a.excluded ?? []).filter((x) => x !== current), current],
+          }
+        : a,
     );
     await this.saveAfterMove();
   }

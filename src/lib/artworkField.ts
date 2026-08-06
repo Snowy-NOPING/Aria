@@ -69,6 +69,7 @@ uniform float uMix;
 uniform float uTime;
 uniform float uWarp;
 uniform float uBrightness;
+uniform float uSaturation;
 
 // Value noise: a hash at each lattice point, smoothstepped between. Cheaper
 // than simplex and indistinguishable once it is only being used to nudge
@@ -147,17 +148,43 @@ vec3 sampleSmooth(sampler2D tex, vec2 uv, vec2 size) {
 void main() {
   vec2 p = vUv;
 
-  // The warp field itself drifts, so the flow never settles into a pattern
-  // that sits still on screen. Large enough to fold the image through itself:
-  // a small displacement of a recognisable picture reads as a wobble, and only
-  // once the fold is bigger than the features does it read as liquid.
+  // Five motions, on periods that don't divide into each other, so the field
+  // never returns to an arrangement you've already watched.
+
+  // 1. A slow field that warps the coordinates the fast one is read at —
+  //    warping the warp. One octave of noise flows; two nested ones curl.
+  vec2 curl = vec2(
+    flow(vec3(p * 0.85, uTime * 0.029)),
+    flow(vec3(p * 0.85 + 7.3, uTime * 0.024))
+  ) * 0.55;
+
+  // 2. The fold itself. Large enough to pass the image through itself: a small
+  //    displacement of a recognisable picture reads as a wobble, and only once
+  //    the fold is bigger than the features does it read as liquid.
   vec2 warp = vec2(
-    flow(vec3(p * 1.35, uTime * 0.075)),
-    flow(vec3(p * 1.55 + 13.7, uTime * 0.061))
+    flow(vec3(p * 1.35 + curl, uTime * 0.075)),
+    flow(vec3(p * 1.55 + curl + 13.7, uTime * 0.061))
   ) * uWarp;
+
+  // 3. Travel, so the whole field crosses the frame rather than churning in
+  //    place.
   vec2 drift = vec2(sin(uTime * 0.043), cos(uTime * 0.031)) * 0.07;
 
-  vec2 uv = p + warp + drift;
+  vec2 centred = p + warp + drift - 0.5;
+
+  // 4. A long roll and a breath in and out — both far too slow to watch
+  //    happening, which is the point: you notice the frame has changed without
+  //    having seen it change.
+  float roll = sin(uTime * 0.0170) * 0.22;
+  float zoom = 1.0 + 0.11 * sin(uTime * 0.0230);
+  centred = mat2(cos(roll), -sin(roll), sin(roll), cos(roll)) * centred * zoom;
+
+  // 5. A swirl that falls off towards the edges, so the middle turns against a
+  //    calmer surround instead of the whole plane spinning as one piece.
+  float twist = 0.26 * sin(uTime * 0.0190) * (1.0 - smoothstep(0.0, 0.75, length(centred)));
+  centred = mat2(cos(twist), -sin(twist), sin(twist), cos(twist)) * centred;
+
+  vec2 uv = centred + 0.5;
   vec3 prev = sampleSmooth(uPrev, cover(uv, uPrevCover), uPrevSize);
   vec3 next = sampleSmooth(uNext, cover(uv, uNextCover), uNextSize);
 
@@ -167,9 +194,11 @@ void main() {
   vec3 col = mix(prev * prev, next * next, uMix);
   col = sqrt(col);
 
-  // Downscaling averages colour together, which desaturates. Push it back.
+  // Downscaling averages colour together, which desaturates. Push it back —
+  // how far is the surface's call, since a field behind a whole app has to
+  // stay out of the way and one filling an immersive window doesn't.
   float luma = dot(col, vec3(0.299, 0.587, 0.114));
-  col = clamp(mix(vec3(luma), col, 1.22), 0.0, 1.0);
+  col = clamp(mix(vec3(luma), col, uSaturation), 0.0, 1.0);
 
   // Applied here rather than as a CSS filter on the canvas: darkening after the
   // dither would scale the dither below one 8-bit step and the banding it was
@@ -379,6 +408,8 @@ async function loadLayer(
 export function createArtworkField(
   canvas: HTMLCanvasElement,
   onLost?: () => void,
+  /** How hard to push the colour back after downscaling. 1 leaves it alone. */
+  saturation = 1.22,
 ): ArtworkField | null {
   // Preferred attributes first, then bare. An opaque drawing buffer and a
   // low-power hint are worth asking for, but not worth losing the field over if
@@ -444,6 +475,7 @@ export function createArtworkField(
     time: gl.getUniformLocation(program, "uTime"),
     warp: gl.getUniformLocation(program, "uWarp"),
     brightness: gl.getUniformLocation(program, "uBrightness"),
+    saturation: gl.getUniformLocation(program, "uSaturation"),
   };
   gl.uniform1i(u.prev, 0);
   gl.uniform1i(u.next, 1);
@@ -512,6 +544,7 @@ export function createArtworkField(
     gl!.uniform1f(u.time, seconds);
     gl!.uniform1f(u.warp, 0.17);
     gl!.uniform1f(u.brightness, brightness);
+    gl!.uniform1f(u.saturation, saturation);
     gl!.drawArrays(gl!.TRIANGLES, 0, 3);
     painted = true;
 
