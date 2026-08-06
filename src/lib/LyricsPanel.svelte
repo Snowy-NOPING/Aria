@@ -212,7 +212,12 @@
     /* Per-context knobs. Surfaces that host this panel set these rather than
        `opacity` directly, so the distance ramp below keeps working. */
     --lyric-dim: 0.34;
-    --lyric-past: 0.24;
+    /* A line that has been sung is gone: the view reads as what's coming, not
+       as a transcript with a marker in it. Hovering the panel brings them back
+       (see `.lyrics:hover` below) so looking up an earlier line is still one
+       gesture away. */
+    --lyric-past: 0;
+    --lyric-past-hover: 0.2;
     --lyric-lit: 1;
     --lyric-blur-step: 0.5px;
     --lyric-glow: none;
@@ -266,6 +271,13 @@
   }
   .line.past {
     opacity: var(--lyric-past);
+    /* Invisible: don't let it take a click meant for the backdrop. Restored on
+       hover along with the line itself. */
+    pointer-events: none;
+  }
+  .lyrics:hover .line.past {
+    opacity: var(--lyric-past-hover);
+    pointer-events: auto;
   }
   .line.active {
     opacity: var(--lyric-lit);

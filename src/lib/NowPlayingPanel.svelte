@@ -132,7 +132,8 @@
     /* Knobs, not `opacity` — see LyricsPanel. Narrow panel, so a gentler blur
        step: fewer lines are visible and heavy softening just reads as blurry. */
     --lyric-dim: 0.34;
-    --lyric-past: 0.22;
+    --lyric-past: 0;
+    --lyric-past-hover: 0.2;
     --lyric-lit: 0.95;
     --lyric-blur-step: 0.4px;
   }

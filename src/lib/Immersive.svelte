@@ -197,25 +197,10 @@
       </button>
 
       <div class="transport" class:transport-idle={idle}>
-        {#if !idle}
-          <div class="track-heading">
-            <div class="title-block">
-              <div class="track-title">{player.current?.title ?? "Not Playing"}</div>
-              <div class="track-subtitle">
-                {#if player.current}
-                  {player.current.album}
-                  {#if player.current.artist}<span>
-                      — <ArtistLink artist={player.current.artist} />
-                    </span>{/if}
-                {/if}
-              </div>
-            </div>
-            <button class="circle-action" title="More options" aria-label="More options">
-              <ImmersiveIcon name="more" size={18} />
-            </button>
-          </div>
-        {/if}
-
+        <!-- Scrubber first, then the track centred beneath it. The heading used
+             to sit above the bar with its actions pushed out to the right,
+             which reads as a list row; centred under the artwork it reads as a
+             caption for it. -->
         <div class="seekrow">
           <span class="time">{formatTime(pos)}</span>
           <div class="track" style="--pct:{progress}%">
@@ -234,14 +219,21 @@
           <span class="time">-{formatTime(Math.max(0, player.duration - pos))}</span>
         </div>
 
-        {#if idle}
-          <div class="idle-meta" transition:fade={{ duration: 180 }}>
-            <div class="track-title">{player.current?.title ?? "Not Playing"}</div>
-            <div class="idle-artist">
-              {#if player.current?.artist}<ArtistLink artist={player.current.artist} />{/if}
-            </div>
+        <!-- Permanent, where it used to appear only when the controls faded
+             out. The title of what you're listening to isn't chrome. -->
+        <div class="meta">
+          <div class="track-title">{player.current?.title ?? "Not Playing"}</div>
+          <div class="track-subtitle">
+            {#if player.current?.artist}<ArtistLink artist={player.current.artist} />{/if}
           </div>
-        {:else}
+          <div class="meta-actions">
+            <button class="circle-action" title="More options" aria-label="More options">
+              <ImmersiveIcon name="more" size={16} />
+            </button>
+          </div>
+        </div>
+
+        {#if !idle}
           <div class="main-controls" transition:fade={{ duration: 180 }}>
             <button
               class="control secondary"
@@ -656,40 +648,52 @@
   .transport-idle {
     gap: 15px;
   }
-  .track-heading {
+  /* Centred under the artwork, in the order you'd read it: what's playing, who
+     by, then what you can do with it. */
+  .meta {
     display: flex;
-    align-items: flex-end;
-    gap: 16px;
-  }
-  .title-block {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 3px;
     min-width: 0;
-    flex: 1;
   }
   .track-title {
-    font-size: 15px;
+    max-width: 100%;
+    font-size: 16px;
     font-weight: 750;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .track-subtitle,
-  .idle-artist {
-    margin-top: 5px;
+  .track-subtitle {
+    max-width: 100%;
     color: var(--immersive-muted);
-    font-size: 13px;
+    font-size: 13.5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .meta-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 9px;
+  }
   .circle-action {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     display: grid;
     place-items: center;
     color: #fff;
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: background 160ms ease, transform 220ms var(--motion-spring);
+  }
+  .circle-action:hover {
+    background: rgba(255, 255, 255, 0.24);
+    transform: scale(1.06);
   }
   .seekrow {
     display: grid;
@@ -799,10 +803,6 @@
       rgba(78, 61, 102, 0.46) var(--pct)
     );
   }
-  .idle-meta {
-    text-align: center;
-    padding-top: 2px;
-  }
 
   .content-panel {
     width: 100%;
@@ -836,7 +836,8 @@
     /* Set the ramp's knobs, not `opacity` — writing opacity here would flatten
        the per-line dim/blur falloff back to one value. */
     --lyric-dim: 0.46;
-    --lyric-past: 0.22;
+    --lyric-past: 0;
+    --lyric-past-hover: 0.2;
     --lyric-lit: 0.97;
     --lyric-blur-step: 0.62px;
     /* Only safe over the artwork field, where the backdrop is always dark. */
