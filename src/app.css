@@ -156,10 +156,13 @@
   --art-tertiary: rgb(71, 62, 113);
   --art-deep: rgb(24, 18, 24);
   --dynamic-bg-blur: 7px;
-  /* The blurred cover itself, not the derived blobs. Brighter than the blobs
-     need to be, because it is what carries the cover's actual colour rather
-     than a three-swatch approximation of it. */
-  --dynamic-bg-brightness: 58%;
+  /* The colour field itself, not the derived blobs. It carries the cover's
+     actual colour rather than a three-swatch approximation, so it is allowed to
+     be bright — the surfaces above it (the content pane's fill, the chrome
+     tint) are what protect text contrast, and both scale with `--wash-opacity`
+     if a blinding cover needs dialling back. Read once at startup by
+     artworkField.ts, which applies it in the shader. */
+  --dynamic-bg-brightness: 85%;
   --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --motion-spring-strong: cubic-bezier(0.34, 1.7, 0.64, 1);
 
