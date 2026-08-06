@@ -19,6 +19,8 @@
  * artworks flow as one field rather than as two images fading past each other.
  */
 
+import { invoke } from "@tauri-apps/api/core";
+
 /**
  * Longest edge of the downscaled texture. Fewer pixels means a softer wash, but
  * too few and the interpolation between them starts showing its seams as
@@ -57,6 +59,8 @@ uniform sampler2D uPrev;
 uniform sampler2D uNext;
 uniform vec2 uPrevCover;
 uniform vec2 uNextCover;
+uniform vec2 uPrevSize;
+uniform vec2 uNextSize;
 uniform float uMix;
 uniform float uTime;
 uniform float uWarp;
@@ -93,6 +97,45 @@ vec2 cover(vec2 uv, vec2 scale) {
   return (uv - 0.5) * scale + 0.5;
 }
 
+/** Cubic B-spline weights for the four texels around a sample point. */
+vec4 splineWeights(float t) {
+  vec4 n = vec4(1.0, 2.0, 3.0, 4.0) - t;
+  vec4 s = n * n * n;
+  float x = s.x;
+  float y = s.y - 4.0 * s.x;
+  float z = s.z - 4.0 * s.y + 6.0 * s.x;
+  return vec4(x, y, z, 6.0 - x - y - z) / 6.0;
+}
+
+/**
+ * Bicubic sampling, as four bilinear taps rather than sixteen point reads: each
+ * tap is placed off-centre so the hardware's own interpolation does half the
+ * work. This is the difference between a soft image and a blocky one at this
+ * magnification — stretching a 128px texture across a window with plain
+ * bilinear filtering creases along every texel boundary, and those creases read
+ * as facets. A cubic spline is smooth across them.
+ */
+vec3 sampleSmooth(sampler2D tex, vec2 uv, vec2 size) {
+  vec2 coord = uv * size - 0.5;
+  vec2 f = fract(coord);
+  coord -= f;
+
+  vec4 wx = splineWeights(f.x);
+  vec4 wy = splineWeights(f.y);
+  vec4 sums = vec4(wx.xz + wx.yw, wy.xz + wy.yw);
+  vec4 taps = coord.xxyy + vec2(-0.5, 1.5).xyxy + vec4(wx.yw, wy.yw) / sums;
+  taps /= size.xxyy;
+
+  vec3 a = texture(tex, taps.xz).rgb;
+  vec3 b = texture(tex, taps.yz).rgb;
+  vec3 c = texture(tex, taps.xw).rgb;
+  vec3 d = texture(tex, taps.yw).rgb;
+
+  float mx = sums.x / (sums.x + sums.y);
+  float my = sums.z / (sums.z + sums.w);
+  return mix(mix(d, c, mx), mix(b, a, mx), my);
+}
+
 void main() {
   vec2 p = vUv;
 
@@ -105,8 +148,8 @@ void main() {
   vec2 drift = vec2(sin(uTime * 0.043), cos(uTime * 0.031)) * 0.055;
 
   vec2 uv = p + warp + drift;
-  vec3 prev = texture(uPrev, cover(uv, uPrevCover)).rgb;
-  vec3 next = texture(uNext, cover(uv, uNextCover)).rgb;
+  vec3 prev = sampleSmooth(uPrev, cover(uv, uPrevCover), uPrevSize);
+  vec3 next = sampleSmooth(uNext, cover(uv, uNextCover), uNextSize);
 
   // Blend where light actually adds up. Crossfading sRGB values directly dips
   // through a muddy grey halfway between two colours; going linear first keeps
@@ -133,17 +176,97 @@ void main() {
   fragColor = vec4(col, 1.0);
 }`;
 
+/**
+ * Ask, at startup, whether the field can run at all — without waiting for a
+ * track to play. The same context and the same shaders as the real thing, on a
+ * throwaway canvas, so a `no-webgl2` here means exactly what it says.
+ */
+export function probeArtworkField() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 2;
+  canvas.height = 2;
+  // Attached, not detached: a canvas in the document is composited with the
+  // window, and that is the arrangement a context can be refused for. A
+  // detached one can report success for a situation that never happens.
+  canvas.style.cssText =
+    "position:fixed;left:0;top:0;width:8px;height:8px;opacity:0;pointer-events:none";
+  document.body.appendChild(canvas);
+
+  // The real constructor: same attributes, same shaders, same link. A null here
+  // has already reported why.
+  const field = createArtworkField(canvas);
+  if (!field) {
+    canvas.remove();
+    return;
+  }
+
+  // Creating a context proves nothing about painting with it, and the steps in
+  // between — decoding a data URI, drawing it down, uploading it, running the
+  // program — are exactly where a working GPU can still produce a blank window.
+  // So: push a known colour through the whole path and read it back.
+  const red = document.createElement("canvas");
+  red.width = red.height = 8;
+  const redCtx = red.getContext("2d");
+  if (!redCtx) {
+    field.destroy();
+    canvas.remove();
+    return;
+  }
+  redCtx.fillStyle = "#ff0000";
+  redCtx.fillRect(0, 0, 8, 8);
+
+  field.setArtwork(red.toDataURL());
+  window.setTimeout(() => {
+    const px = field.sampleCentre();
+    const painted = !!px && px[0] > px[1] + 20 && px[0] > 40;
+    reportStatus(
+      painted ? "painting" : "blank",
+      `${rendererName} · centre pixel rgb(${px?.join(", ") ?? "none"})`,
+    );
+    field.destroy();
+    canvas.remove();
+  }, 600);
+}
+
 export interface ArtworkField {
   /** Dissolve to a new artwork, or to nothing. Same source is a no-op. */
   setArtwork(src: string | null): void;
   /** True once something has been drawn — the canvas is blank before that. */
   readonly painted: () => boolean;
+  /**
+   * Draw a frame and read the centre pixel straight back out. Only the
+   * self-test uses this: the drawing buffer isn't preserved across frames, so
+   * the read has to happen in the same call as the draw.
+   */
+  sampleCentre(): [number, number, number] | null;
   destroy(): void;
 }
 
 interface Layer {
   tex: WebGLTexture;
   aspect: number;
+  /** Texel dimensions, which the bicubic taps are positioned in. */
+  width: number;
+  height: number;
+}
+
+let lastShaderLog = "";
+/** Filled in by the first successful context, for the diagnostic line. */
+let rendererName = "unknown renderer";
+
+/**
+ * Record why the field did or didn't start. A backdrop that quietly falls back
+ * to the CSS wash looks like a badly tuned shader rather than an absent one, and
+ * there's no console to read in a packaged window — so the answer goes to disk
+ * beside the rest of the app's state.
+ */
+function reportStatus(state: string, detail: string) {
+  void invoke("save_data", {
+    key: "fieldStatus",
+    value: { state, detail, at: new Date().toISOString() },
+  }).catch(() => {
+    /* diagnostics are never worth failing over */
+  });
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, source: string) {
@@ -152,7 +275,8 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string) {
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error("artwork field shader:", gl.getShaderInfoLog(shader));
+    lastShaderLog = gl.getShaderInfoLog(shader) ?? "compile failed";
+    console.error("artwork field shader:", lastShaderLog);
     gl.deleteShader(shader);
     return null;
   }
@@ -231,37 +355,58 @@ async function loadLayer(
     gl.deleteTexture(tex);
     return null;
   }
-  return { tex, aspect: tw / th };
+  return { tex, aspect: tw / th, width: tw, height: th };
 }
 
 /**
  * Start a field on `canvas`. Returns null when WebGL2 isn't available, which is
  * the caller's cue to fall back to a CSS wash.
  */
-export function createArtworkField(canvas: HTMLCanvasElement): ArtworkField | null {
-  const gl = canvas.getContext("webgl2", {
-    alpha: false,
-    antialias: false,
-    depth: false,
-    stencil: false,
-    powerPreference: "low-power",
-  });
-  if (!gl) return null;
+export function createArtworkField(
+  canvas: HTMLCanvasElement,
+  onLost?: () => void,
+): ArtworkField | null {
+  // Preferred attributes first, then bare. An opaque drawing buffer and a
+  // low-power hint are worth asking for, but not worth losing the field over if
+  // this particular compositor refuses the combination.
+  const gl =
+    canvas.getContext("webgl2", {
+      alpha: false,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      powerPreference: "low-power",
+    }) ?? canvas.getContext("webgl2");
+  if (!gl) {
+    const one = canvas.getContext("webgl") ? "webgl1 available" : "no webgl at all";
+    reportStatus("no-webgl2", `getContext('webgl2') returned null (${one})`);
+    return null;
+  }
 
   const vs = compile(gl, gl.VERTEX_SHADER, VERT);
   const fs = compile(gl, gl.FRAGMENT_SHADER, FRAG);
   const program = vs && fs ? gl.createProgram() : null;
-  if (!vs || !fs || !program) return null;
+  if (!vs || !fs || !program) {
+    reportStatus("shader", lastShaderLog || "shader compile failed");
+    return null;
+  }
   gl.attachShader(program, vs);
   gl.attachShader(program, fs);
   gl.linkProgram(program);
   gl.deleteShader(vs);
   gl.deleteShader(fs);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.error("artwork field link:", gl.getProgramInfoLog(program));
+    const log = gl.getProgramInfoLog(program) ?? "link failed";
+    console.error("artwork field link:", log);
+    reportStatus("link", log);
     gl.deleteProgram(program);
     return null;
   }
+  const debug = gl.getExtension("WEBGL_debug_renderer_info");
+  rendererName = String(
+    (debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) ?? "",
+  );
+  reportStatus("ok", rendererName);
 
   // One triangle covering the clip space — no index buffer, no quad seam.
   const vao = gl.createVertexArray();
@@ -279,6 +424,8 @@ export function createArtworkField(canvas: HTMLCanvasElement): ArtworkField | nu
     next: gl.getUniformLocation(program, "uNext"),
     prevCover: gl.getUniformLocation(program, "uPrevCover"),
     nextCover: gl.getUniformLocation(program, "uNextCover"),
+    prevSize: gl.getUniformLocation(program, "uPrevSize"),
+    nextSize: gl.getUniformLocation(program, "uNextSize"),
     mix: gl.getUniformLocation(program, "uMix"),
     time: gl.getUniformLocation(program, "uTime"),
     warp: gl.getUniformLocation(program, "uWarp"),
@@ -345,6 +492,8 @@ export function createArtworkField(canvas: HTMLCanvasElement): ArtworkField | nu
     gl!.bindTexture(gl!.TEXTURE_2D, next.tex);
     gl!.uniform2fv(u.prevCover, coverScale(active.aspect));
     gl!.uniform2fv(u.nextCover, coverScale(next.aspect));
+    gl!.uniform2f(u.prevSize, active.width, active.height);
+    gl!.uniform2f(u.nextSize, next.width, next.height);
     gl!.uniform1f(u.mix, mix);
     gl!.uniform1f(u.time, seconds);
     gl!.uniform1f(u.warp, 0.075);
@@ -374,11 +523,39 @@ export function createArtworkField(canvas: HTMLCanvasElement): ArtworkField | nu
   }
   document.addEventListener("visibilitychange", onVisibility);
 
+  // A driver reset or a GPU switch takes the context away and leaves a frozen
+  // canvas behind. Preventing the default keeps the canvas restorable, and the
+  // owner is told so it can build a fresh field on it.
+  function onContextLost(e: Event) {
+    e.preventDefault();
+    destroyed = true;
+    if (frame) cancelAnimationFrame(frame);
+    reportStatus("lost", "webglcontextlost");
+    onLost?.();
+  }
+  canvas.addEventListener("webglcontextlost", onContextLost);
+
   const observer = new ResizeObserver(() => schedule());
   observer.observe(canvas);
 
   return {
     painted: () => painted,
+
+    sampleCentre() {
+      if (destroyed || !next) return null;
+      render(performance.now());
+      const px = new Uint8Array(4);
+      gl.readPixels(
+        Math.floor(canvas.width / 2),
+        Math.floor(canvas.height / 2),
+        1,
+        1,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        px,
+      );
+      return [px[0], px[1], px[2]];
+    },
 
     setArtwork(src: string | null) {
       if (src === source) return;
@@ -409,6 +586,7 @@ export function createArtworkField(canvas: HTMLCanvasElement): ArtworkField | nu
       if (frame) cancelAnimationFrame(frame);
       observer.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
+      canvas.removeEventListener("webglcontextlost", onContextLost);
       if (prev) gl.deleteTexture(prev.tex);
       if (next) gl.deleteTexture(next.tex);
       gl.deleteBuffer(buffer);

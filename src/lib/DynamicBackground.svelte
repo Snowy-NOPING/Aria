@@ -28,14 +28,40 @@
 
   $effect(() => {
     if (!canvas) return;
-    const made = createArtworkField(canvas);
-    if (!made) {
-      unsupported = true;
-      return;
-    }
-    field = made;
+    const target = canvas;
+    let made: ArtworkField | null = null;
+    let attempt = 0;
+    let timer = 0;
+
+    // A context can be refused for reasons that have nothing to do with support
+    // — the window being recomposited as immersive enters, a driver reset, a
+    // moment of GPU pressure. Giving up on the first null latches the CSS wash
+    // in for the life of the component, which is how a working GPU ends up
+    // showing the fallback. Retry a couple of times before believing it.
+    const attach = () => {
+      made = createArtworkField(target, () => {
+        // Context lost. The canvas is still restorable, so start over on it
+        // rather than dropping to the CSS wash for the rest of the session.
+        field = null;
+        live = false;
+        attempt = 0;
+        timer = window.setTimeout(attach, 500);
+      });
+      if (made) {
+        field = made;
+        return;
+      }
+      if (++attempt >= 3) {
+        unsupported = true;
+        return;
+      }
+      timer = window.setTimeout(attach, attempt * 400);
+    };
+    attach();
+
     return () => {
-      made.destroy();
+      window.clearTimeout(timer);
+      made?.destroy();
       field = null;
       live = false;
     };

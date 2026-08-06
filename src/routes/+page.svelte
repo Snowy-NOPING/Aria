@@ -12,6 +12,7 @@
   import Resizer from "$lib/Resizer.svelte";
   import NowPlayingPanel from "$lib/NowPlayingPanel.svelte";
   import DynamicBackground from "$lib/DynamicBackground.svelte";
+  import { probeArtworkField } from "$lib/artworkField";
   import EditTagsModal from "$lib/EditTagsModal.svelte";
   import Immersive from "$lib/Immersive.svelte";
   import Titlebar from "$lib/Titlebar.svelte";
@@ -20,6 +21,13 @@
 
   let viewportWidth = $state(1280);
   $effect(() => layout.setViewport(viewportWidth));
+
+  // Records whether the GPU colour field can run, before any track is played.
+  // Without this the answer only exists while something is playing, which is
+  // the one moment nobody is reading a log.
+  $effect(() => {
+    probeArtworkField();
+  });
 
   let backdrop = $state<{
     key: string;

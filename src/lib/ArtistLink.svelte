@@ -10,9 +10,10 @@
   function open(e: MouseEvent, name: string) {
     // Track rows are clickable too, and a click on the artist means the artist.
     e.stopPropagation();
-    // The artist page is behind the immersive overlay, so opening one there has
-    // to leave it — otherwise the click looks like it did nothing.
-    if (ui.immersive) void ui.exit();
+    // Immersive has its own library browser over the top. Opening the artist
+    // there keeps you in immersive instead of throwing you back to the window
+    // — the page still gets shown, just in the surface you were already in.
+    if (ui.immersive) ui.browserOpen = true;
     nav.go("artist", name);
   }
 </script>
