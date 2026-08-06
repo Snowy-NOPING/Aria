@@ -109,7 +109,7 @@
   {#if theme.artworkField}
     <div class="background-stack" aria-hidden="true">
       <div class="background-frame">
-        <DynamicBackground art={backdrop.art} palette={backdrop.palette} />
+        <DynamicBackground art={backdrop.art} palette={backdrop.palette} label="immersive" />
       </div>
     </div>
   {/if}

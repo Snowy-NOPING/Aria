@@ -1,13 +1,17 @@
 <script lang="ts">
   import type { ArtworkPalette } from "$lib/accent";
-  import { createArtworkField, type ArtworkField } from "$lib/artworkField";
+  import { createArtworkField, reportStatus, type ArtworkField } from "$lib/artworkField";
 
   let {
     art = null,
     palette,
+    // Names the instance in the diagnostic — "the field failed" is only useful
+    // if you know which of the three (window, immersive, artist page) it was.
+    label = "field",
   }: {
     art?: string | null;
     palette: ArtworkPalette;
+    label?: string;
   } = $props();
 
   const paletteStyle = $derived(
@@ -51,11 +55,15 @@
         field = made;
         return;
       }
-      if (++attempt >= 3) {
+      if (++attempt >= 6) {
+        reportStatus("fallback", `${label}: gave up after ${attempt} attempts`);
         unsupported = true;
         return;
       }
-      timer = window.setTimeout(attach, attempt * 400);
+      // Backs off to a few seconds: whatever refuses a context during a window
+      // transition is over in far less than that, and the cost of waiting is a
+      // second of CSS wash, not a session of it.
+      timer = window.setTimeout(attach, attempt * 500);
     };
     attach();
 
@@ -80,8 +88,10 @@
     // than reveal the canvas before the first draw lands.
     let raf = 0;
     const check = () => {
-      if (active.painted()) live = true;
-      else raf = requestAnimationFrame(check);
+      if (active.painted()) {
+        if (!live) reportStatus("live", `${label}: shader painting`);
+        live = true;
+      } else raf = requestAnimationFrame(check);
     };
     check();
     return () => cancelAnimationFrame(raf);

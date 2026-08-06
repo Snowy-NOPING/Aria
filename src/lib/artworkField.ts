@@ -260,11 +260,15 @@ let rendererName = "unknown renderer";
  * there's no console to read in a packaged window — so the answer goes to disk
  * beside the rest of the app's state.
  */
-function reportStatus(state: string, detail: string) {
-  void invoke("save_data", {
-    key: "fieldStatus",
-    value: { state, detail, at: new Date().toISOString() },
-  }).catch(() => {
+const log: { state: string; detail: string; at: string }[] = [];
+
+export function reportStatus(state: string, detail: string) {
+  // A log, not a single line: the interesting case is a sequence — the probe
+  // succeeding, the window's field going live, and then the immersive one
+  // giving up — and only the last of those survives a single-value file.
+  log.push({ state, detail, at: new Date().toISOString() });
+  if (log.length > 16) log.shift();
+  void invoke("save_data", { key: "fieldStatus", value: log }).catch(() => {
     /* diagnostics are never worth failing over */
   });
 }

@@ -67,7 +67,7 @@
        moves over it. A fixed-palette skin paints no field at all. -->
   {#if image && theme.artworkField}
     <div class="field" aria-hidden="true">
-      <DynamicBackground art={image} palette={field} />
+      <DynamicBackground art={image} palette={field} label="artist" />
     </div>
   {/if}
   <div class="view">

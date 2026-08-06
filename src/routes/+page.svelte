@@ -121,7 +121,7 @@
          WebGL context (and the outgoing texture) on every track change. -->
     <div class="background-stack" aria-hidden="true">
       <div class="background-frame">
-        <DynamicBackground art={backdrop.art} palette={backdrop.palette} />
+        <DynamicBackground art={backdrop.art} palette={backdrop.palette} label="window" />
       </div>
     </div>
   {/if}
