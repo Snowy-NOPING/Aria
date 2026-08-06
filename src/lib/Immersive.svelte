@@ -226,11 +226,6 @@
           <div class="track-subtitle">
             {#if player.current?.artist}<ArtistLink artist={player.current.artist} />{/if}
           </div>
-          <div class="meta-actions">
-            <button class="circle-action" title="More options" aria-label="More options">
-              <ImmersiveIcon name="more" size={16} />
-            </button>
-          </div>
         </div>
 
         {#if !idle}
@@ -673,27 +668,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  .meta-actions {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    margin-top: 9px;
-  }
-  .circle-action {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    color: #fff;
-    background: rgba(255, 255, 255, 0.14);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: background 160ms ease, transform 220ms var(--motion-spring);
-  }
-  .circle-action:hover {
-    background: rgba(255, 255, 255, 0.24);
-    transform: scale(1.06);
   }
   .seekrow {
     display: grid;
