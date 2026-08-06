@@ -41,6 +41,18 @@
       : new Set<number>(),
   );
 
+  /**
+   * A new track starts at the top. The panel is a persistent scroller, so
+   * without this it opens wherever the last song left it — halfway down
+   * someone else's second verse — and only jumps back once a line goes active,
+   * which for an intro can be twenty seconds of the wrong lyrics on screen.
+   * Instant, not smooth: this is a cut between songs, not a movement within one.
+   */
+  $effect(() => {
+    void player.current?.path;
+    container?.scrollTo({ top: 0, behavior: "auto" });
+  });
+
   // Smooth auto-scroll to keep the active line centred. Scroll only this
   // panel: scrollIntoView can also move the document and expose the app below
   // the fixed immersive overlay.

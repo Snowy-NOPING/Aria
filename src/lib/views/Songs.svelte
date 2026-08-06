@@ -186,20 +186,26 @@
   }
   /* Sticky so the name of whoever you're scrolling through stays overhead —
      the section header is the only thing telling you where you are once the
-     first few rows have gone past. */
+     first few rows have gone past.
+
+     Square, and bled out through the view's padding to both edges: a rounded
+     card would be a floating pill with rows sliding under its corners, which
+     is exactly as odd as it sounds. A band with a hairline under it reads as
+     what it is — a divider between sections. The negative margin has to mirror
+     `.view`'s padding, so it changes with it at the breakpoint below. */
   .artist-head {
     position: sticky;
-    top: 0;
+    top: -28px;
     z-index: 2;
     display: flex;
     align-items: center;
     gap: 11px;
-    width: 100%;
-    padding: 9px 10px;
-    margin-bottom: 2px;
-    border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
-    backdrop-filter: blur(18px) saturate(1.3);
+    width: auto;
+    margin: 0 -32px 2px;
+    padding: 10px 32px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter: blur(20px) saturate(1.3);
     text-align: left;
   }
   .artist-head:hover .artist-name {
@@ -218,6 +224,15 @@
     flex: none;
     font-size: 12px;
     color: var(--text-faint);
+  }
+  /* `.view` drops to `20px 18px` here, so the bleed and the sticky offset have
+     to follow or the band stops short of the edges. */
+  @media (max-width: 900px) {
+    .artist-head {
+      top: -20px;
+      margin: 0 -18px 2px;
+      padding: 9px 18px;
+    }
   }
   .note {
     color: var(--text-dim);
