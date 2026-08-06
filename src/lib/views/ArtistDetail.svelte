@@ -16,10 +16,6 @@
   const tracks = $derived(name ? library.artistTracks(name) : []);
   const albums = $derived(name ? library.artistAlbums(name) : []);
   const image = $derived(name ? library.artistArt(name) : null);
-  /** A set portrait is meant to be looked at; a borrowed square cover is not —
-   *  blown up to banner width it's just a pixelated crop, so it runs blurred
-   *  behind the name as a colour field instead. */
-  const borrowed = $derived(!!image && !library.artistImages[name]);
   const totalTime = $derived(tracks.reduce((s, t) => s + t.duration, 0));
 
   /**
@@ -79,7 +75,7 @@
          work. The image runs the full width and the name sits in it. -->
     <div class="banner" class:photo={!!image}>
       {#if image}
-        <div class="art" class:borrowed style="background-image: url('{image}')"></div>
+        <div class="art" style="background-image: url('{image}')"></div>
       {/if}
       <!-- An artist is reached from wherever you saw the name, so back means
            back — with Songs as the floor when there's no history to pop. -->
@@ -191,12 +187,6 @@
        painting a band of `--bg` over it would put a seam between the two. */
     -webkit-mask-image: linear-gradient(to bottom, #000 56%, transparent 98%);
     mask-image: linear-gradient(to bottom, #000 56%, transparent 98%);
-  }
-  /* Scaled past the edges so the blur has material to work with instead of
-     fading out against the sides. */
-  .art.borrowed {
-    filter: blur(34px) saturate(1.3);
-    transform: scale(1.18);
   }
   /* No image: the artwork-derived field, same as the album page. */
   .banner:not(.photo) {
