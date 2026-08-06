@@ -22,12 +22,16 @@
 import { invoke } from "@tauri-apps/api/core";
 
 /**
- * Longest edge of the downscaled texture. Fewer pixels means a softer wash, but
- * too few and the interpolation between them starts showing its seams as
- * lozenge-shaped facets — the "cheap upscale" look. This keeps enough of the
- * cover's structure that the warp has something to move.
+ * Longest edge of the downscaled texture, and the single control over how much
+ * of the cover you can still read. 128 keeps its composition legible — a window
+ * stays a window, a horizon stays a horizon — which is a magnified photograph,
+ * not a colour field. At 44 nothing survives but where the colours sat.
+ *
+ * The reason this can go low is the bicubic sampling below. Bilinear creases
+ * along every texel boundary, so a small texture used to facet, which is what
+ * forced this up in the first place; a cubic spline is smooth across them.
  */
-const TEXTURE_EDGE = 128;
+const TEXTURE_EDGE = 44;
 
 /** How long a change of artwork takes to dissolve. */
 const FADE_MS = 1200;
@@ -92,9 +96,13 @@ float flow(vec3 p) {
   return (noise(p) * 0.66 + noise(p * 2.13 + 4.7) * 0.34) * 2.0 - 1.0;
 }
 
-/** Crop rather than squash: the wash must not stretch a square cover wide. */
+/**
+ * Crop rather than squash: the wash must not stretch a square cover wide. The
+ * extra factor pushes in past the edges of the art, so the frame holds a
+ * region of colour rather than a whole picture with its composition intact.
+ */
 vec2 cover(vec2 uv, vec2 scale) {
-  return (uv - 0.5) * scale + 0.5;
+  return (uv - 0.5) * scale * 0.62 + 0.5;
 }
 
 /** Cubic B-spline weights for the four texels around a sample point. */
@@ -140,12 +148,14 @@ void main() {
   vec2 p = vUv;
 
   // The warp field itself drifts, so the flow never settles into a pattern
-  // that sits still on screen.
+  // that sits still on screen. Large enough to fold the image through itself:
+  // a small displacement of a recognisable picture reads as a wobble, and only
+  // once the fold is bigger than the features does it read as liquid.
   vec2 warp = vec2(
-    flow(vec3(p * 1.7, uTime * 0.075)),
-    flow(vec3(p * 1.9 + 13.7, uTime * 0.061))
+    flow(vec3(p * 1.35, uTime * 0.075)),
+    flow(vec3(p * 1.55 + 13.7, uTime * 0.061))
   ) * uWarp;
-  vec2 drift = vec2(sin(uTime * 0.043), cos(uTime * 0.031)) * 0.055;
+  vec2 drift = vec2(sin(uTime * 0.043), cos(uTime * 0.031)) * 0.07;
 
   vec2 uv = p + warp + drift;
   vec3 prev = sampleSmooth(uPrev, cover(uv, uPrevCover), uPrevSize);
@@ -500,7 +510,7 @@ export function createArtworkField(
     gl!.uniform2f(u.nextSize, next.width, next.height);
     gl!.uniform1f(u.mix, mix);
     gl!.uniform1f(u.time, seconds);
-    gl!.uniform1f(u.warp, 0.075);
+    gl!.uniform1f(u.warp, 0.17);
     gl!.uniform1f(u.brightness, brightness);
     gl!.drawArrays(gl!.TRIANGLES, 0, 3);
     painted = true;
